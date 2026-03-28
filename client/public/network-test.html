@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Network Test - Online Recruit System</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .test { margin: 20px 0; padding: 10px; border: 1px solid #ccc; }
+        .success { background-color: #d4edda; }
+        .error { background-color: #f8d7da; }
+    </style>
+</head>
+<body>
+    <h1>Network Access Test</h1>
+    <p>Testing network connectivity from: <span id="clientIP"></span></p>
+    
+    <div id="tests"></div>
+    
+    <script>
+        const tests = [
+            { name: 'Frontend Server', url: 'http://192.168.29.175:3001' },
+            { name: 'Backend Health', url: 'http://192.168.29.175:5050/api/health' },
+            { name: 'Network Info', url: 'http://192.168.29.175:5050/api/network-info' }
+        ];
+        
+        async function runTests() {
+            const testsDiv = document.getElementById('tests');
+            
+            for (const test of tests) {
+                const testDiv = document.createElement('div');
+                testDiv.className = 'test';
+                testDiv.innerHTML = `<strong>${test.name}</strong>: Testing...`;
+                testsDiv.appendChild(testDiv);
+                
+                try {
+                    const response = await fetch(test.url);
+                    if (response.ok) {
+                        testDiv.className = 'test success';
+                        testDiv.innerHTML = `<strong>${test.name}</strong>: ✅ SUCCESS (${response.status})`;
+                    } else {
+                        testDiv.className = 'test error';
+                        testDiv.innerHTML = `<strong>${test.name}</strong>: ❌ FAILED (${response.status})`;
+                    }
+                } catch (error) {
+                    testDiv.className = 'test error';
+                    testDiv.innerHTML = `<strong>${test.name}</strong>: ❌ ERROR (${error.message})`;
+                }
+            }
+        }
+        
+        // Get client IP
+        fetch('https://api.ipify.org?format=json')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('clientIP').textContent = data.ip;
+            })
+            .catch(() => {
+                document.getElementById('clientIP').textContent = 'Unknown';
+            });
+        
+        runTests();
+    </script>
+</body>
+</html>

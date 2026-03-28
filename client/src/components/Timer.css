@@ -1,0 +1,59 @@
+.timer {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  background: white;
+  padding: 16px 24px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 1000;
+  border: 2px solid #28a745;
+}
+
+.timer.warning {
+  border-color: #ffc107;
+  animation: pulse 2s infinite;
+}
+
+.timer.critical {
+  border-color: #dc3545;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+.timer-icon {
+  font-size: 24px;
+}
+
+.timer-label {
+  font-size: 12px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.timer-value {
+  font-size: 24px;
+  font-weight: 700;
+  font-family: 'Courier New', monospace;
+  color: #2c3e50;
+}
+
+.timer.warning .timer-value {
+  color: #ffc107;
+}
+
+.timer.critical .timer-value {
+  color: #dc3545;
+}
