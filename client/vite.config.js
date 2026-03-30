@@ -10,7 +10,7 @@ export default defineConfig({
     cors: true,
     proxy: {
       '/api': {
-        target: 'http:// 10.148.182.78:5050',
+        target: 'http://192.168.29.103:5050',
         changeOrigin: true,
         secure: false,
         ws: true,

@@ -1,12 +1,16 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import Editor from '@monaco-editor/react'
-import Navbar from '../../components/Navbar'
 import Timer from '../../components/Timer'
 import { examService } from '../../services/examService'
 import { submissionService } from '../../services/submissionService'
 import { codeExecutionService } from '../../services/codeExecutionService'
 import './Candidate.css'
+
+// Module-level flag — survives React component teardown during navigation.
+// Set to true just before window.location.replace() so beforeunload knows
+// this is a controlled modal reload and must NOT count a second violation.
+let isManualReloadPending = false
 
 const ExamAttempt = () => {
   const { examId } = useParams()
@@ -28,13 +32,47 @@ const ExamAttempt = () => {
   const [showResumeOverlay, setShowResumeOverlay] = useState(false) // Show resume exam overlay
   const [isFirstFullscreenActivation, setIsFirstFullscreenActivation] = useState(true) // Track if this is first fullscreen activation
   const [isExamBlocked, setIsExamBlocked] = useState(false) // Block exam UI when fullscreen is exited after refresh
+  const [reloadViolationCount, setReloadViolationCount] = useState(0) // Violation count to show after reload
+  const [showCancelRestoreOverlay, setShowCancelRestoreOverlay] = useState(false) // Blocking overlay after Ctrl+R cancel
+  const [showSubmitModal, setShowSubmitModal] = useState(false) // Custom submit confirmation modal
+  const [showReloadModal, setShowReloadModal] = useState(false) // Custom reload warning modal
 
   // Violation tracking system
   const lastViolationTimeRef = useRef(0) // Debounce protection for violations
   const isAlertOpenRef = useRef(false) // Prevent violations while alert is active
 
+  // Refs that mirror state so event handlers always see current values
+  // without needing to re-register listeners on every render
+  const submissionRef = useRef(null)
+  const isSubmittingExamRef = useRef(false)
+  const isFirstFullscreenActivationRef = useRef(true)
+  const isExamBlockedRef = useRef(false)
+
+  // Flag set in beforeunload so visibilitychange / fullscreenchange
+  // know the page is unloading and must NOT count a violation
+  const isUnloadingRef = useRef(false)
+
+  // Set true on Ctrl+R / F5 keydown — fires BEFORE fullscreenchange,
+  // so the fullscreen handler can distinguish reload-key exit from normal exit
+  const isReloadKeyPressedRef = useRef(false)
+
+  // Flag to suppress violation triggers while a submit confirmation dialog is open.
+  // window.confirm() causes fullscreenchange/visibilitychange to fire — these must
+  // not be counted as violations since the user is doing a legitimate action.
+  const isConfirmDialogOpenRef = useRef(false)
+
+  // Set true just before a manual (user-confirmed) reload so beforeunload
+  // and fullscreenchange know NOT to count an extra violation.
+  const isManualReloadRef = useRef(false)
+
   // Internet connectivity warning system
   const isOfflineAlertShownRef = useRef(false) // Prevent multiple offline alerts
+
+  // Keep refs in sync with state so event handlers always read current values
+  useEffect(() => { submissionRef.current = submission }, [submission])
+  useEffect(() => { isSubmittingExamRef.current = isSubmittingExam }, [isSubmittingExam])
+  useEffect(() => { isFirstFullscreenActivationRef.current = isFirstFullscreenActivation }, [isFirstFullscreenActivation])
+  useEffect(() => { isExamBlockedRef.current = isExamBlocked }, [isExamBlocked])
 
   const getViolationCount = () => {
     const stored = localStorage.getItem(`violations_${examId}`)
@@ -42,36 +80,24 @@ const ExamAttempt = () => {
   }
 
   const incrementViolation = (reason) => {
-    // Debounce protection: prevent multiple violations within 1 second
+    // Legacy helper kept for handleSubmitDueToViolation compatibility.
+    // Direct violation counting is now done inline in each handler
+    // to avoid race conditions. This function is only called for
+    // auto-submit-due-to-violation checks.
     const now = Date.now()
     if (now - lastViolationTimeRef.current < 1000) {
       console.log(`Violation debounced: ${reason}`)
       return getViolationCount()
     }
-    
-    // Prevent violations while alert is active
     if (isAlertOpenRef.current) {
       console.log(`Violation blocked during alert: ${reason}`)
       return getViolationCount()
     }
-    
     lastViolationTimeRef.current = now
-
     const currentCount = getViolationCount()
     const newCount = currentCount + 1
     localStorage.setItem(`violations_${examId}`, newCount.toString())
-    
     console.log(`Violation detected: ${reason}. Count: ${newCount}/3`)
-    
-    isAlertOpenRef.current = true
-    if (newCount <= 3) {
-      alert(`Warning: You are attempting to leave the exam. Violations: ${newCount}/3`)
-    } else {
-      alert('Exam terminated due to malpractice')
-      handleSubmitDueToViolation()
-    }
-    isAlertOpenRef.current = false
-    
     return newCount
   }
 
@@ -105,23 +131,25 @@ const ExamAttempt = () => {
 
   // Set session flag when component mounts (first time visiting this exam page)
   useEffect(() => {
-    // Check for page reload violation BEFORE setting the flag
-    const wasPageLoaded = sessionStorage.getItem(`examPageLoaded_${examId}`)
-    const hasActiveSubmission = sessionStorage.getItem('activeSubmissionId')
-    
-    if (wasPageLoaded && hasActiveSubmission) {
-      // This is a page reload during an active exam
-      const violationCount = incrementViolation('Page reload')
-      
-      // If violations exceeded, block resume
-      if (violationCount > 3) {
+    // Check if this is a reload that happened during an active exam.
+    // beforeunload sets 'reloadViolation' in sessionStorage just before the page
+    // unloads, so we can detect it here after the page reloads.
+    const wasReload = sessionStorage.getItem(`reloadViolation_${examId}`)
+    if (wasReload) {
+      // Clear the flag immediately so it doesn't fire again on next mount
+      sessionStorage.removeItem(`reloadViolation_${examId}`)
+      const count = getViolationCount()
+      if (count > 3) {
         setIsExamBlocked(true)
-        return
+      } else {
+        // Show the violation warning popup after reload
+        setReloadViolationCount(count)
       }
     }
-    
-    // Mark that this exam page has been loaded in this session
-    // This flag persists across page refreshes within the same session
+
+    // Mark that this exam page has been loaded in this session.
+    // This flag is used to detect resume vs first-start for fullscreen logic.
+    // We set it AFTER the reload check above so startExam can read it correctly.
     sessionStorage.setItem(`examPageLoaded_${examId}`, 'true')
   }, [examId])
 
@@ -234,22 +262,42 @@ const ExamAttempt = () => {
     }
   }, [exam])
 
-  // Prevent accidental page refresh during exam
+  // beforeunload: count exactly ONE violation for any Ctrl+R attempt.
+  // Sets sessionStorage flag so the after-reload popup works.
+  // Cancel detection is handled by visibilitychange (page becomes visible again).
   useEffect(() => {
     const handleBeforeUnload = (e) => {
-      if (submission && submission.status === 'in-progress') {
-        e.preventDefault()
-        e.returnValue = 'Your exam is in progress. Are you sure you want to leave?'
-        return e.returnValue
+      const sub = submissionRef.current
+      if (!sub || sub.status !== 'in-progress') return
+      if (isConfirmDialogOpenRef.current) return // submit confirm dialog — not a violation
+
+      // Manual reload from our modal — violation already counted in the button handler.
+      // Do NOT call e.preventDefault() so the browser shows NO popup and unloads cleanly.
+      if (isManualReloadPending) return
+
+      isUnloadingRef.current = true
+
+      // Count exactly ONE violation — debounced to prevent double-fire
+      const now = Date.now()
+      if (now - lastViolationTimeRef.current >= 500) {
+        lastViolationTimeRef.current = now
+        const currentCount = getViolationCount()
+        const newCount = currentCount + 1
+        localStorage.setItem(`violations_${examId}`, newCount.toString())
+        console.log(`Reload violation counted. Total: ${newCount}/3`)
       }
+
+      // Flag persists across reload — mount useEffect reads it to show popup
+      sessionStorage.setItem(`reloadViolation_${examId}`, 'true')
+
+      e.preventDefault()
+      e.returnValue = 'Your exam is in progress. Are you sure you want to leave?'
+      return e.returnValue
     }
 
     window.addEventListener('beforeunload', handleBeforeUnload)
-
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload)
-    }
-  }, [submission])
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [examId])
 
   // Internet connectivity monitoring
   useEffect(() => {
@@ -270,131 +318,151 @@ const ExamAttempt = () => {
     }
   }, [])
 
-  // Fullscreen enforcement during exam
+  // Fullscreen enforcement, tab-switch detection, and cancel detection.
+  // Registered ONCE — all state read via refs, no stale closures, no duplicate listeners.
   useEffect(() => {
     let fullscreenCheckTimeout = null
-    let fullscreenRetryCount = 0
-    const MAX_SILENT_RETRIES = 2
+
+    const isInFullscreen = () =>
+      !!(document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.mozFullScreenElement ||
+        document.msFullscreenElement)
+
+    // keydown: intercept Ctrl+R / F5 to prevent browser reload dialog.
+    // Show custom reload modal instead — fullscreen never breaks, no browser popup.
+    const handleKeyDown = (e) => {
+      const sub = submissionRef.current
+      if (!sub || sub.status !== 'in-progress') return
+      if (isConfirmDialogOpenRef.current) return
+
+      const isReloadKey = (e.ctrlKey && (e.key === 'r' || e.key === 'R')) || e.key === 'F5'
+      if (!isReloadKey) return
+
+      // Prevent browser from showing its own reload dialog
+      e.preventDefault()
+      e.stopPropagation()
+
+      // Show custom modal — fullscreen stays intact
+      setShowReloadModal(true)
+    }
+
+    // visibilitychange: tab switch / window minimize detection only.
+    // Cancel detection is handled by the keydown timeout above.
+    const handleVisibilityChange = () => {
+      const sub = submissionRef.current
+      if (!sub || sub.status !== 'in-progress' || isSubmittingExamRef.current) return
+      if (isConfirmDialogOpenRef.current) return // submit confirm dialog — not a violation
+      if (isManualReloadPending) return // manual modal reload — not a violation
+
+      // Skip if hidden due to Ctrl+R dialog
+      if (document.hidden && (isReloadKeyPressedRef.current || isUnloadingRef.current)) return
+
+      // Normal tab switch / window minimize
+      if (document.hidden && !isAlertOpenRef.current) {
+        const now = Date.now()
+        if (now - lastViolationTimeRef.current >= 1000) {
+          lastViolationTimeRef.current = now
+          const currentCount = getViolationCount()
+          const newCount = currentCount + 1
+          localStorage.setItem(`violations_${examId}`, newCount.toString())
+          console.log(`Tab switch violation. Count: ${newCount}/3`)
+
+          isAlertOpenRef.current = true
+          if (newCount <= 3) {
+            alert(`Warning: You switched tabs. Violations: ${newCount}/3`)
+          } else {
+            alert('Exam terminated due to malpractice')
+            handleSubmitDueToViolation()
+          }
+          isAlertOpenRef.current = false
+        }
+      }
+    }
+
+    // pageshow: reset unloading flag (fires after reload dialog dismissed)
+    const handlePageShow = () => {
+      isUnloadingRef.current = false
+    }
 
     const handleFullscreenChange = () => {
-      // Check if we're still in the exam (not submitted)
-      if (submission && submission.status === 'in-progress') {
-        // Check if fullscreen was exited
-        if (!document.fullscreenElement && 
-            !document.webkitFullscreenElement && 
-            !document.mozFullScreenElement && 
-            !document.msFullscreenElement) {
-          
-          // Don't show warning if we're intentionally exiting for submission
-          if (isSubmittingExam) {
-            return
-          }
-          
-          // Only track violation if not hidden and alert is not open (to avoid double counting with tab switch)
-          if (!document.hidden && !isAlertOpenRef.current) {
-            // Track violation for fullscreen exit
-            const violationCount = incrementViolation('Fullscreen exit')
-            if (violationCount > 3) {
-              return // Auto-submission will be handled by incrementViolation
+      const sub = submissionRef.current
+      if (!sub || sub.status !== 'in-progress') return
+      if (isSubmittingExamRef.current) return
+      if (isConfirmDialogOpenRef.current) return // submit confirm dialog — not a violation
+      if (isManualReloadRef.current || isManualReloadPending) return // user-confirmed reload — ignore fullscreen exit
+
+      if (!isInFullscreen()) {
+        if (fullscreenCheckTimeout) clearTimeout(fullscreenCheckTimeout)
+
+        // Suppress violation — fullscreen exited because of Ctrl+R dialog
+        if (isReloadKeyPressedRef.current || isUnloadingRef.current) {
+          console.log('Fullscreen exited due to reload dialog — violation already counted')
+          return
+        }
+
+        // Normal fullscreen exit (ESC, window minimize, etc.)
+        if (!document.hidden && !isAlertOpenRef.current) {
+          const now = Date.now()
+          if (now - lastViolationTimeRef.current >= 1000) {
+            lastViolationTimeRef.current = now
+            const currentCount = getViolationCount()
+            const newCount = currentCount + 1
+            localStorage.setItem(`violations_${examId}`, newCount.toString())
+            console.log(`Fullscreen exit violation. Count: ${newCount}/3`)
+
+            isAlertOpenRef.current = true
+            if (newCount <= 3) {
+              alert(`Warning: You exited fullscreen. Violations: ${newCount}/3`)
+            } else {
+              alert('Exam terminated due to malpractice')
+              handleSubmitDueToViolation()
             }
+            isAlertOpenRef.current = false
           }
-          
-          // Clear any existing timeout
-          if (fullscreenCheckTimeout) {
-            clearTimeout(fullscreenCheckTimeout)
+        }
+
+        fullscreenCheckTimeout = setTimeout(() => {
+          // Don't block exam if we're waiting for cancel detection (isReloadKeyPressedRef still true)
+          if (isReloadKeyPressedRef.current) return
+          if (!isInFullscreen() && submissionRef.current?.status === 'in-progress' && !isSubmittingExamRef.current) {
+            setIsExamBlocked(true)
+            setShowResumeOverlay(true)
           }
-          
-          // Wait a short moment before re-requesting fullscreen
-          // This allows browser dialogs to complete their lifecycle
-          fullscreenCheckTimeout = setTimeout(() => {
-            // Check again if we're still out of fullscreen and exam is in progress
-            if (submission && submission.status === 'in-progress' && !isSubmittingExam) {
-              if (!document.fullscreenElement && 
-                  !document.webkitFullscreenElement && 
-                  !document.mozFullScreenElement && 
-                  !document.msFullscreenElement) {
-                
-                // If this is NOT the first fullscreen activation, show resume popup and block exam
-                // (meaning fullscreen was previously entered and now exited - page refresh scenario)
-                if (!isFirstFullscreenActivation) {
-                  setIsExamBlocked(true)
-                  setShowResumeOverlay(true)
-                } else {
-                  // First fullscreen exit - silently re-request fullscreen
-                  // This handles browser dialogs without showing warnings
-                  if (fullscreenRetryCount < MAX_SILENT_RETRIES) {
-                    fullscreenRetryCount++
-                    requestFullscreen()
-                  } else {
-                    // After multiple silent retries, show warning
-                    // This catches intentional exits (ESC key, minimize, etc.)
-                    fullscreenRetryCount = 0
-                    requestFullscreen()
-                  }
-                }
-              }
-            }
-          }, 200) // 200ms delay to handle browser dialog behavior
-        } else {
-          // Fullscreen was entered
-          // Mark that fullscreen has been entered at least once
-          if (isFirstFullscreenActivation) {
-            setIsFirstFullscreenActivation(false)
-            // Store in sessionStorage that fullscreen was entered for this exam
-            sessionStorage.setItem(`fullscreenEntered_${examId}`, 'true')
-          }
-          
-          // Unblock exam when fullscreen is re-entered
-          if (isExamBlocked) {
-            setIsExamBlocked(false)
-          }
-          
-          // Clear any pending timeout and reset retry count
-          if (fullscreenCheckTimeout) {
-            clearTimeout(fullscreenCheckTimeout)
-            fullscreenCheckTimeout = null
-          }
-          fullscreenRetryCount = 0
+        }, 300)
+      } else {
+        // Fullscreen entered
+        if (isFirstFullscreenActivationRef.current) {
+          setIsFirstFullscreenActivation(false)
+          sessionStorage.setItem(`fullscreenEntered_${examId}`, 'true')
+        }
+        if (isExamBlockedRef.current) setIsExamBlocked(false)
+        if (fullscreenCheckTimeout) {
+          clearTimeout(fullscreenCheckTimeout)
+          fullscreenCheckTimeout = null
         }
       }
     }
 
-    // Tab switch detection
-    const handleVisibilityChange = () => {
-      if (submission && submission.status === 'in-progress' && !isSubmittingExam) {
-        // Only trigger violation when tab is hidden and alert is not open
-        if (document.hidden && !isAlertOpenRef.current) {
-          // Tab was switched away or window was minimized
-          const violationCount = incrementViolation('Tab switch')
-          if (violationCount > 3) {
-            return // Auto-submission will be handled by incrementViolation
-          }
-        }
-      }
-    }
-
-    // Listen for fullscreen change events
+    document.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('pageshow', handlePageShow)
     document.addEventListener('fullscreenchange', handleFullscreenChange)
     document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
     document.addEventListener('mozfullscreenchange', handleFullscreenChange)
     document.addEventListener('MSFullscreenChange', handleFullscreenChange)
-    
-    // Listen for tab switch events
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
-      // Clean up timeout on unmount
-      if (fullscreenCheckTimeout) {
-        clearTimeout(fullscreenCheckTimeout)
-      }
-      
+      if (fullscreenCheckTimeout) clearTimeout(fullscreenCheckTimeout)
+      document.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('pageshow', handlePageShow)
       document.removeEventListener('fullscreenchange', handleFullscreenChange)
       document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
       document.removeEventListener('mozfullscreenchange', handleFullscreenChange)
       document.removeEventListener('MSFullscreenChange', handleFullscreenChange)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [submission, isSubmittingExam, isFirstFullscreenActivation, isExamBlocked, examId])
+  }, [examId])
 
   const startExam = async () => {
     try {
@@ -439,9 +507,18 @@ const ExamAttempt = () => {
       // Fetch remaining time from server (based on server time, not client time)
       const timeData = await submissionService.getRemainingTime(submissionData.submission._id)
       setRemainingTime(timeData.remainingSeconds)
-      
-      // Request fullscreen mode after exam loads successfully
-      requestFullscreen()
+
+      // Detect first-start vs resume-after-reload.
+      // 'examStarted' is set here on first start and persists for the session.
+      // On reload it will already be present, so we know it's a resume.
+      const examAlreadyStarted = sessionStorage.getItem(`examStarted_${examId}`)
+      if (!examAlreadyStarted) {
+        // First time starting — set the flag and auto-enter fullscreen
+        sessionStorage.setItem(`examStarted_${examId}`, 'true')
+        requestFullscreen()
+      }
+      // On resume: do NOT auto-enter fullscreen.
+      // The resume overlay (shown by the mount useEffect) has the manual button.
     } catch (err) {
       const errorMessage = err.response?.data?.message || 'Failed to start exam'
       setError(errorMessage)
@@ -689,6 +766,8 @@ const ExamAttempt = () => {
     // Clear fullscreen tracking for this exam
     sessionStorage.removeItem(`fullscreenEntered_${examId}`)
     sessionStorage.removeItem(`examPageLoaded_${examId}`)
+    sessionStorage.removeItem(`examStarted_${examId}`)
+    sessionStorage.removeItem(`reloadViolation_${examId}`)
     
     // Clear violations for this exam
     localStorage.removeItem(`violations_${examId}`)
@@ -696,27 +775,38 @@ const ExamAttempt = () => {
     navigate(`/candidate/result/${submission._id}`)
   }
 
-  const handleSubmit = async () => {
-    if (!window.confirm('Are you sure you want to submit your exam?')) {
-      return
-    }
+  const handleSubmit = () => {
+    // Open custom modal — does NOT use window.confirm() so fullscreen is never broken
+    setShowSubmitModal(true)
+  }
 
-    // Set flag to indicate intentional fullscreen exit
+  const handleConfirmSubmit = async () => {
+    setShowSubmitModal(false)
     setIsSubmittingExam(true)
     setSubmitting(true)
-
     try {
       await performExamSubmission()
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to submit exam')
       setSubmitting(false)
-      setIsSubmittingExam(false) // Reset flag on error
+      setIsSubmittingExam(false)
     }
   }
 
+  const handleCancelSubmit = () => {
+    setShowSubmitModal(false)
+    // No violation, no fullscreen change, exam continues normally
+  }
+
   const handleTimeUp = () => {
-    alert('Time is up! Your exam will be submitted automatically.')
-    handleSubmit()
+    // Time up — submit directly without confirmation
+    setIsSubmittingExam(true)
+    setSubmitting(true)
+    performExamSubmission().catch(err => {
+      setError(err.response?.data?.message || 'Failed to submit exam')
+      setSubmitting(false)
+      setIsSubmittingExam(false)
+    })
   }
 
   // Navigation functions
@@ -738,10 +828,13 @@ const ExamAttempt = () => {
       const unansweredCount = getUnansweredCount(currentSection)
       
       if (unansweredCount > 0) {
+        isConfirmDialogOpenRef.current = true
         const confirmed = window.confirm(
           `You have not attempted ${unansweredCount} question(s) in this section. Are you sure you want to move to the next section?`
         )
+        isConfirmDialogOpenRef.current = false
         if (!confirmed) {
+          setTimeout(() => requestFullscreen(), 200)
           return
         }
       }
@@ -789,10 +882,13 @@ const ExamAttempt = () => {
     const unansweredCount = getUnansweredCount(currentSection)
     
     if (unansweredCount > 0) {
+      isConfirmDialogOpenRef.current = true
       const confirmed = window.confirm(
         `You have not attempted ${unansweredCount} question(s) in the current section. Are you sure you want to switch sections?`
       )
+      isConfirmDialogOpenRef.current = false
       if (!confirmed) {
+        setTimeout(() => requestFullscreen(), 200)
         return
       }
     }
@@ -804,7 +900,6 @@ const ExamAttempt = () => {
   if (loading) {
     return (
       <div>
-        <Navbar />
         <div className="container">
           <div className="loading">Loading exam...</div>
         </div>
@@ -815,7 +910,6 @@ const ExamAttempt = () => {
   if (error) {
     return (
       <div>
-        <Navbar />
         <div className="container">
           <div className="error-message" style={{ whiteSpace: 'pre-line' }}>{error}</div>
           <button onClick={() => navigate('/candidate/exams')} className="btn btn-secondary">
@@ -828,7 +922,6 @@ const ExamAttempt = () => {
 
   return (
     <div>
-      <Navbar />
       <div style={{ 
         filter: isExamBlocked ? 'blur(5px)' : 'none',
         pointerEvents: isExamBlocked ? 'none' : 'auto',
@@ -840,7 +933,7 @@ const ExamAttempt = () => {
         {submission && submission.status === 'in-progress' && (
           <div style={{
             position: 'fixed',
-            top: '80px',
+            top: '20px',
             right: '20px',
             backgroundColor: getViolationCount() > 2 ? '#ffebee' : '#f5f5f5',
             border: `2px solid ${getViolationCount() > 2 ? '#f44336' : '#ddd'}`,
@@ -1175,8 +1268,293 @@ const ExamAttempt = () => {
         </button>
       </div>
 
-      {/* Resume Exam Overlay */}
-      {showResumeOverlay && (
+      {/* Reload Violation Warning — shown once after a page reload */}
+      {reloadViolationCount > 0 && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10000
+        }}>
+          <div style={{
+            backgroundColor: '#fff',
+            borderRadius: '8px',
+            padding: '36px 40px',
+            maxWidth: '460px',
+            textAlign: 'center',
+            boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
+            border: '3px solid #e74c3c'
+          }}>
+            <div style={{ fontSize: '40px', marginBottom: '12px' }}>⚠️</div>
+            <h2 style={{ color: '#e74c3c', marginTop: 0, marginBottom: '12px' }}>
+              Violation Warning
+            </h2>
+            <p style={{ color: '#333', fontSize: '16px', marginBottom: '8px', lineHeight: '1.6' }}>
+              You reloaded the page during the exam.
+            </p>
+            <p style={{
+              color: reloadViolationCount >= 3 ? '#e74c3c' : '#856404',
+              fontSize: '18px',
+              fontWeight: 'bold',
+              marginBottom: '24px'
+            }}>
+              Violations used: {reloadViolationCount} / 3
+            </p>
+            {reloadViolationCount < 3 ? (
+              <p style={{ color: '#555', fontSize: '14px', marginBottom: '24px' }}>
+                You have {3 - reloadViolationCount} violation(s) remaining. Further violations will terminate your exam.
+              </p>
+            ) : (
+              <p style={{ color: '#e74c3c', fontSize: '14px', marginBottom: '24px', fontWeight: 'bold' }}>
+                This is your final warning. One more violation will auto-submit your exam.
+              </p>
+            )}
+            <button
+              onClick={() => setReloadViolationCount(0)}
+              style={{
+                padding: '12px 32px',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                backgroundColor: '#e74c3c',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              I Understand
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel-Reload Fullscreen Restore Overlay */}
+      {showCancelRestoreOverlay && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.85)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 99999
+        }}>
+          <div style={{
+            backgroundColor: '#fff',
+            borderRadius: '8px',
+            padding: '40px',
+            maxWidth: '440px',
+            textAlign: 'center',
+            boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
+            border: '3px solid #e74c3c'
+          }}>
+            <div style={{ fontSize: '36px', marginBottom: '12px' }}>⚠️</div>
+            <h2 style={{ color: '#e74c3c', marginTop: 0, marginBottom: '12px' }}>
+              Violation Warning
+            </h2>
+            <p style={{ color: '#333', fontSize: '15px', marginBottom: '8px' }}>
+              You attempted to reload the page during the exam.
+            </p>
+            <p style={{
+              color: reloadViolationCount >= 3 ? '#e74c3c' : '#856404',
+              fontSize: '20px',
+              fontWeight: 'bold',
+              marginBottom: '8px'
+            }}>
+              Violations: {reloadViolationCount} / 3
+            </p>
+            <p style={{ color: '#555', fontSize: '13px', marginBottom: '24px' }}>
+              {reloadViolationCount < 3
+                ? `You have ${3 - reloadViolationCount} violation(s) remaining before your exam is auto-submitted.`
+                : 'This is your final warning. One more violation will terminate your exam.'}
+            </p>
+            <button
+              onClick={async () => {
+                // Hide overlay AFTER fullscreen is granted, not before.
+                // Hiding it first causes a re-render that can interrupt the request.
+                const elem = document.documentElement
+                try {
+                  if (elem.requestFullscreen) {
+                    await elem.requestFullscreen()
+                  } else if (elem.webkitRequestFullscreen) {
+                    elem.webkitRequestFullscreen()
+                  } else if (elem.mozRequestFullScreen) {
+                    elem.mozRequestFullScreen()
+                  } else if (elem.msRequestFullscreen) {
+                    elem.msRequestFullscreen()
+                  }
+                } catch (err) {
+                  console.warn('Fullscreen request failed:', err)
+                } finally {
+                  setShowCancelRestoreOverlay(false)
+                }
+              }}
+              style={{
+                padding: '12px 32px',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                backgroundColor: '#27ae60',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              Continue Exam in Fullscreen
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Submit Confirmation Modal — custom React modal, no window.confirm */}
+      {showSubmitModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 99999
+        }}>
+          <div style={{
+            backgroundColor: '#fff',
+            borderRadius: '8px',
+            padding: '40px',
+            maxWidth: '440px',
+            width: '90%',
+            textAlign: 'center',
+            boxShadow: '0 4px 24px rgba(0,0,0,0.3)'
+          }}>
+            <div style={{ fontSize: '36px', marginBottom: '12px' }}>📋</div>
+            <h2 style={{ color: '#2c3e50', marginTop: 0, marginBottom: '12px' }}>
+              Confirm Submission
+            </h2>
+            <p style={{ color: '#555', fontSize: '16px', marginBottom: '28px', lineHeight: '1.6' }}>
+              Are you sure you want to submit your exam? This action cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
+              <button
+                onClick={handleCancelSubmit}
+                style={{
+                  padding: '12px 28px',
+                  fontSize: '15px',
+                  fontWeight: 'bold',
+                  backgroundColor: '#95a5a6',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmSubmit}
+                disabled={submitting}
+                style={{
+                  padding: '12px 28px',
+                  fontSize: '15px',
+                  fontWeight: 'bold',
+                  backgroundColor: '#27ae60',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: submitting ? 'not-allowed' : 'pointer',
+                  opacity: submitting ? 0.7 : 1
+                }}
+              >
+                {submitting ? 'Submitting...' : 'Confirm Submit'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reload Warning Modal — custom modal, no browser popup, fullscreen stays intact */}
+      {showReloadModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.7)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 99999
+        }}>
+          <div style={{
+            backgroundColor: '#fff',
+            borderRadius: '8px',
+            padding: '40px',
+            maxWidth: '440px',
+            width: '90%',
+            textAlign: 'center',
+            boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
+            border: '3px solid #e67e22'
+          }}>
+            <div style={{ fontSize: '36px', marginBottom: '12px' }}>⚠️</div>
+            <h2 style={{ color: '#e67e22', marginTop: 0, marginBottom: '12px' }}>
+              Reload Warning
+            </h2>
+            <p style={{ color: '#333', fontSize: '15px', marginBottom: '8px', lineHeight: '1.6' }}>
+              Reloading will count as a violation.
+            </p>
+            <p style={{ color: '#555', fontSize: '13px', marginBottom: '28px' }}>
+              Current violations: {getViolationCount()} / 3
+            </p>
+            <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
+              <button
+                onClick={() => setShowReloadModal(false)}
+                style={{
+                  padding: '12px 28px',
+                  fontSize: '15px',
+                  fontWeight: 'bold',
+                  backgroundColor: '#27ae60',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowReloadModal(false)
+                  // Count exactly ONE violation for this modal-confirmed reload
+                  const current = getViolationCount()
+                  const newCount = current + 1
+                  localStorage.setItem(`violations_${examId}`, newCount.toString())
+                  sessionStorage.setItem(`reloadViolation_${examId}`, 'true')
+                  console.log(`Modal reload confirmed. Violation count: ${newCount}/3`)
+                  // Set flag BEFORE navigating so beforeunload returns early
+                  // without calling e.preventDefault() — no browser popup, no double-count
+                  isManualReloadRef.current = true
+                  isManualReloadPending = true
+                  window.location.replace(window.location.href)
+                }}
+                style={{
+                  padding: '12px 28px',
+                  fontSize: '15px',
+                  fontWeight: 'bold',
+                  backgroundColor: '#e74c3c',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                Reload
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Resume Exam Overlay */}      {showResumeOverlay && (
         <div style={{
           position: 'fixed',
           top: 0,
@@ -1219,7 +1597,7 @@ const ExamAttempt = () => {
               onMouseEnter={(e) => e.target.style.backgroundColor = '#2980b9'}
               onMouseLeave={(e) => e.target.style.backgroundColor = '#3498db'}
             >
-              Resume Exam in Fullscreen
+              Enter Fullscreen
             </button>
           </div>
         </div>

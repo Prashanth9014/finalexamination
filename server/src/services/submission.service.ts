@@ -136,10 +136,24 @@ If you wish to reattempt, please contact the admin.`);
     examId: submissionData.examId.toString(),
     status: submissionData.status
   }));
-  
-  const submission = await Submission.create(submissionData);
-  
-  console.log('Submission created successfully!');
+
+  // Use findOneAndUpdate with upsert to atomically create-or-fetch the submission.
+  // This prevents the E11000 duplicate key error that occurs when two concurrent
+  // requests (e.g. React StrictMode double-invoke) both pass the "no existing
+  // submission" check and then both try to insert the same userId+examId pair.
+  // $setOnInsert only writes the fields when the document is being CREATED,
+  // so an already-existing in-progress submission is never overwritten.
+  const submission = await Submission.findOneAndUpdate(
+    { userId, examId: examObjectId },
+    { $setOnInsert: submissionData },
+    { upsert: true, new: true, setDefaultsOnInsert: true },
+  );
+
+  if (!submission) {
+    throw new Error('Failed to create or retrieve submission');
+  }
+
+  console.log('Submission created/retrieved successfully!');
   console.log('Submission _id:', submission._id);
   console.log('Submission examId:', submission.examId);
   console.log('Submission userId:', submission.userId);

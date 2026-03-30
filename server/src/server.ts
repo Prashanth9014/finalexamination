@@ -7,7 +7,7 @@ import { logger } from './utils/logger';
 const env = loadEnv();
 const PORT = env.PORT || 5000;
 
-const LOCAL_MONGO_URI = 'mongodb://localhost:27017/online_recruit_system';
+const LOCAL_MONGODB_URI='mongodb://localhost:27017/examdb';
 
 function srvToStandardUri(srvUri: string): string {
   try {
@@ -51,7 +51,7 @@ async function connectMongo(): Promise<void> {
         logger.warn('Standard Atlas failed. Trying local MongoDB...');
       }
       try {
-        await mongoose.connect(LOCAL_MONGO_URI, options);
+        await mongoose.connect(env.MONGODB_URI, options);
         logger.info('Connected to MongoDB (local)');
       } catch {
         logger.error('All connection attempts failed. Install MongoDB locally or fix network.', mongoError);

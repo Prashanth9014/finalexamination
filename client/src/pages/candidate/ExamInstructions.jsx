@@ -130,7 +130,7 @@ const ExamInstructions = () => {
               </li>
               
               <li style={{ marginBottom: '12px' }}>
-                <strong>Coding Guidelines:</strong> Write clean, well-commented code. Test your solutions before saving.
+                <strong>Coding Guidelines:</strong> Write clean, well-commented code. Verify your solutions before saving.
               </li>
               
               <li style={{ marginBottom: '12px' }}>
@@ -138,7 +138,7 @@ const ExamInstructions = () => {
               </li>
               
               <li style={{ marginBottom: '12px' }}>
-                <strong>Technical Requirements:</strong> Use a modern browser (Chrome, Firefox, Safari, Edge) with JavaScript enabled.
+                <strong>Technical Requirements:</strong> Use a modern browser (Chrome, Firefox, Safari, Edge).
               </li>
               
               <li style={{ marginBottom: '12px' }}>
