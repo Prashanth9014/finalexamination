@@ -28,6 +28,8 @@ export interface EnvConfig {
   USE_MAILTRAP: boolean;
   MAILTRAP_USER?: string;
   MAILTRAP_PASSWORD?: string;
+  FRONTEND_URL: string;
+
 }
 
 export function loadEnv(): EnvConfig {
@@ -46,6 +48,8 @@ export function loadEnv(): EnvConfig {
     USE_MAILTRAP = 'false',
     MAILTRAP_USER,
     MAILTRAP_PASSWORD,
+    FRONTEND_URL,
+
   } = process.env;
 
   const isProd = NODE_ENV === 'production';
@@ -98,5 +102,7 @@ export function loadEnv(): EnvConfig {
     USE_MAILTRAP: useMailtrap,
     MAILTRAP_USER: MAILTRAP_USER,
     MAILTRAP_PASSWORD: MAILTRAP_PASSWORD,
+    FRONTEND_URL: FRONTEND_URL || 'http://localhost:3003',
+
   };
 }

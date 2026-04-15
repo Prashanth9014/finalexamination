@@ -205,7 +205,7 @@ const CreateExam = () => {
         question: '',
         options: ['', '', '', ''],
         correctAnswer: '',
-        marks: 5,
+        marks: 1,
       })
     }
     

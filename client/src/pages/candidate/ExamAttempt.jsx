@@ -36,6 +36,10 @@ const ExamAttempt = () => {
   const [showCancelRestoreOverlay, setShowCancelRestoreOverlay] = useState(false) // Blocking overlay after Ctrl+R cancel
   const [showSubmitModal, setShowSubmitModal] = useState(false) // Custom submit confirmation modal
   const [showReloadModal, setShowReloadModal] = useState(false) // Custom reload warning modal
+  const [showSectionWarningModal, setShowSectionWarningModal] = useState(false)
+  const [pendingSectionIndex, setPendingSectionIndex] = useState(null)
+  const [showWriteCodeModal, setShowWriteCodeModal] = useState(false)
+
 
   // Violation tracking system
   const lastViolationTimeRef = useRef(0) // Debounce protection for violations
@@ -104,7 +108,7 @@ const ExamAttempt = () => {
   const handleSubmitDueToViolation = async () => {
     console.log('Auto-submitting exam due to violation limit exceeded')
     setIsSubmittingExam(true)
-    
+
     try {
       // Use existing handleSubmit logic but skip confirmation
       await performExamSubmission()
@@ -172,15 +176,15 @@ const ExamAttempt = () => {
         handleSubmitDueToViolation()
         return
       }
-      
+
       // Check if fullscreen was previously entered (stored in sessionStorage)
       const fullscreenWasEntered = sessionStorage.getItem(`fullscreenEntered_${examId}`)
-      
+
       // Check if we're currently not in fullscreen
-      const isInFullscreen = document.fullscreenElement || 
-                           document.webkitFullscreenElement || 
-                           document.mozFullScreenElement || 
-                           document.msFullscreenElement
+      const isInFullscreen = document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.mozFullScreenElement ||
+        document.msFullscreenElement
 
       // If fullscreen was entered before but we're not in fullscreen now, this is a refresh
       if (fullscreenWasEntered && !isInFullscreen && !isSubmittingExam) {
@@ -194,7 +198,7 @@ const ExamAttempt = () => {
   // Helper function to request fullscreen with browser compatibility
   const requestFullscreen = () => {
     const elem = document.documentElement
-    
+
     if (elem.requestFullscreen) {
       elem.requestFullscreen().catch(err => {
         console.warn('Fullscreen request failed:', err)
@@ -235,7 +239,7 @@ const ExamAttempt = () => {
     if (exam && exam.sections) {
       const initialLanguages = {}
       const initialAnswers = {}
-      
+
       exam.sections.forEach((section, sectionIndex) => {
         section.questions.forEach((question, questionIndex) => {
           if (question.type === 'coding') {
@@ -252,7 +256,7 @@ const ExamAttempt = () => {
           }
         })
       })
-      
+
       if (Object.keys(initialLanguages).length > 0) {
         setCodingLanguages(prev => ({ ...prev, ...initialLanguages }))
       }
@@ -468,22 +472,22 @@ const ExamAttempt = () => {
     try {
       setLoading(true)
       setError('')
-      
+
       // Start the exam submission
       const submissionData = await submissionService.startExam(examId)
-      
+
       // Update submission state
       setSubmission(submissionData.submission)
-      
+
       // Fetch exam questions (secure endpoint)
       const examData = await examService.getExamForAttempt(examId)
       setExam(examData.exam)
-      
+
       // Load saved answers if submission exists
       if (submissionData.submission && submissionData.submission._id) {
         try {
           const savedAnswersData = await submissionService.getSavedAnswers(submissionData.submission._id)
-          
+
           // Convert saved answers array to answers object format
           const savedAnswersObj = {}
           savedAnswersData.answers.forEach(answer => {
@@ -495,7 +499,7 @@ const ExamAttempt = () => {
               savedAnswersObj[answer.questionId] = answer.codingAnswer
             }
           })
-          
+
           console.log('✅ Loaded', Object.keys(savedAnswersObj).length, 'saved answers')
           setAnswers(savedAnswersObj)
         } catch (err) {
@@ -503,7 +507,7 @@ const ExamAttempt = () => {
           // Continue with empty answers - not a critical error
         }
       }
-      
+
       // Fetch remaining time from server (based on server time, not client time)
       const timeData = await submissionService.getRemainingTime(submissionData.submission._id)
       setRemainingTime(timeData.remainingSeconds)
@@ -522,7 +526,7 @@ const ExamAttempt = () => {
     } catch (err) {
       const errorMessage = err.response?.data?.message || 'Failed to start exam'
       setError(errorMessage)
-      
+
       // If already submitted, redirect to submissions
       if (errorMessage.includes('already submitted')) {
         setTimeout(() => {
@@ -536,7 +540,7 @@ const ExamAttempt = () => {
 
   const handleAnswerChange = async (sectionIndex, questionIndex, value) => {
     const questionId = `${sectionIndex}-${questionIndex}`
-    
+
     // Update local state immediately for responsive UI
     setAnswers({
       ...answers,
@@ -558,19 +562,19 @@ const ExamAttempt = () => {
 
   const handleLanguageChange = (sectionIndex, questionIndex, language) => {
     const questionId = `${sectionIndex}-${questionIndex}`
-    
+
     // Update the language
     setCodingLanguages({
       ...codingLanguages,
       [questionId]: language,
     })
-    
+
     // Update the editor content with language-specific starter code
     // Only if the current answer is empty or matches a starter template
     const currentAnswer = answers[questionId]
     const currentLanguage = codingLanguages[questionId] || 'python'
     const currentTemplate = getDefaultStarterCode(currentLanguage)
-    
+
     // If current answer is empty or matches the old template, replace with new template
     if (!currentAnswer || currentAnswer.trim() === '' || currentAnswer === currentTemplate) {
       setAnswers({
@@ -597,13 +601,17 @@ const ExamAttempt = () => {
     const language = codingLanguages[questionId] || 'python'
     const executed = codeOutputs[questionId] ? true : false
 
+    // if (!code || !code.trim()) {
+    //   setCodeSaving({ ...codeSaving, [questionId]: 'saved' })
+    //   return
+    // }
     if (!code || !code.trim()) {
-      alert('Please write some code before submitting.')
+      setShowWriteCodeModal(true)
       return
     }
 
     if (!submission || !submission._id) {
-      alert('Submission not found. Please refresh the page.')
+      setCodeSaving({ ...codeSaving, [questionId]: 'saved' })
       return
     }
 
@@ -618,12 +626,14 @@ const ExamAttempt = () => {
         code,
         executed
       )
-      alert('Code saved successfully!')
+      setCodeSaving(prev => ({ ...prev, [questionId]: 'saved' }))
+      setTimeout(() => setCodeSaving(prev => ({ ...prev, [questionId]: false })), 3000)
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to save code. Please try again.')
-    } finally {
-      setCodeSaving({ ...codeSaving, [questionId]: false })
+      setCodeSaving({ ...codeSaving, [questionId]: 'saved' })
     }
+    // } finally {
+    //   setCodeSaving({ ...codeSaving, [questionId]: false })
+    // }
   }
 
   const handleRunCode = async (sectionIndex, questionIndex) => {
@@ -646,7 +656,7 @@ const ExamAttempt = () => {
       if (question.testCases && question.testCases.length > 0) {
         // Run with test cases
         const result = await codeExecutionService.runWithTestCases(language, code, question.testCases)
-        
+
         setCodeOutputs({
           ...codeOutputs,
           [questionId]: {
@@ -661,7 +671,7 @@ const ExamAttempt = () => {
       } else {
         // Run without test cases (legacy mode)
         const result = await codeExecutionService.runCode(language, code, '')
-        
+
         setCodeOutputs({
           ...codeOutputs,
           [questionId]: {
@@ -689,14 +699,14 @@ const ExamAttempt = () => {
   const performExamSubmission = async () => {
     // Auto-save all coding answers before submission
     const codingQuestions = []
-    
+
     // Collect all coding questions with answers
     exam.sections.forEach((section, sectionIndex) => {
       section.questions.forEach((question, questionIndex) => {
         if (question.type === 'coding') {
           const questionId = `${sectionIndex}-${questionIndex}`
           const code = answers[questionId]
-          
+
           // Only save if there's code written
           if (code && code.trim() !== '') {
             codingQuestions.push({
@@ -713,7 +723,7 @@ const ExamAttempt = () => {
     // Save all coding answers before submitting exam
     if (codingQuestions.length > 0) {
       console.log(`Auto-saving ${codingQuestions.length} coding answer(s) before submission...`)
-      
+
       for (const codingQ of codingQuestions) {
         try {
           await submissionService.saveCodingAnswer(
@@ -729,7 +739,7 @@ const ExamAttempt = () => {
           // Continue with other saves even if one fails
         }
       }
-      
+
       console.log('All coding answers auto-saved successfully')
     }
 
@@ -739,7 +749,7 @@ const ExamAttempt = () => {
       // Parse questionId to get section and question index
       const [sectionIndex, questionIndex] = questionId.split('-').map(Number)
       const question = exam.sections[sectionIndex]?.questions[questionIndex]
-      
+
       // Check question type and format answer accordingly
       if (question?.type === 'coding') {
         return {
@@ -756,22 +766,22 @@ const ExamAttempt = () => {
     })
 
     const result = await submissionService.submitExam(submission._id, answersArray)
-    
+
     // Exit fullscreen before navigation
     exitFullscreen()
-    
+
     // Clear the active submission ID from storage
     sessionStorage.removeItem('activeSubmissionId')
-    
+
     // Clear fullscreen tracking for this exam
     sessionStorage.removeItem(`fullscreenEntered_${examId}`)
     sessionStorage.removeItem(`examPageLoaded_${examId}`)
     sessionStorage.removeItem(`examStarted_${examId}`)
     sessionStorage.removeItem(`reloadViolation_${examId}`)
-    
+
     // Clear violations for this exam
     localStorage.removeItem(`violations_${examId}`)
-    
+
     navigate(`/candidate/result/${submission._id}`)
   }
 
@@ -826,19 +836,23 @@ const ExamAttempt = () => {
     } else {
       // Last question in section - check if there are unanswered questions
       const unansweredCount = getUnansweredCount(currentSection)
-      
-      if (unansweredCount > 0) {
-        isConfirmDialogOpenRef.current = true
-        const confirmed = window.confirm(
-          `You have not attempted ${unansweredCount} question(s) in this section. Are you sure you want to move to the next section?`
-        )
-        isConfirmDialogOpenRef.current = false
-        if (!confirmed) {
-          setTimeout(() => requestFullscreen(), 200)
-          return
-        }
-      }
 
+      // if (unansweredCount > 0) {
+      //   isConfirmDialogOpenRef.current = true
+      //   const confirmed = window.confirm(
+      //     `You have not attempted ${unansweredCount} question(s) in this section. Are you sure you want to move to the next section?`
+      //   )
+      //   isConfirmDialogOpenRef.current = false
+      //   if (!confirmed) {
+      //     setTimeout(() => requestFullscreen(), 200)
+      //     return
+      //   }
+      // }
+      if (unansweredCount > 0) {
+        setPendingSectionIndex(currentSection + 1)
+        setShowSectionWarningModal(true)
+        return
+      }
       // Move to next section
       if (currentSection < exam.sections.length - 1) {
         setCurrentSection(currentSection + 1)
@@ -850,53 +864,66 @@ const ExamAttempt = () => {
   const getUnansweredCount = (sectionIndex) => {
     const section = exam.sections[sectionIndex]
     let unanswered = 0
-    
+
     section.questions.forEach((question, questionIndex) => {
       const questionId = `${sectionIndex}-${questionIndex}`
       if (!answers[questionId] || answers[questionId].trim() === '') {
         unanswered++
       }
     })
-    
+
     return unanswered
   }
 
   const getAttemptedCount = (sectionIndex) => {
     const section = exam.sections[sectionIndex]
     let attempted = 0
-    
+
     section.questions.forEach((question, questionIndex) => {
       const questionId = `${sectionIndex}-${questionIndex}`
       if (answers[questionId] && answers[questionId].trim() !== '') {
         attempted++
       }
     })
-    
+
     return attempted
   }
 
+  // const handleSectionChange = (newSectionIndex) => {
+  //   if (newSectionIndex === currentSection) return
+
+  //   // Check for unanswered questions in current section
+  //   const unansweredCount = getUnansweredCount(currentSection)
+
+  //   if (unansweredCount > 0) {
+  //     isConfirmDialogOpenRef.current = true
+  //     const confirmed = window.confirm(
+  //       `You have not attempted ${unansweredCount} question(s) in the current section. Are you sure you want to switch sections?`
+  //     )
+  //     isConfirmDialogOpenRef.current = false
+  //     if (!confirmed) {
+  //       setTimeout(() => requestFullscreen(), 200)
+  //       return
+  //     }
+  //   }
+
+  //   setCurrentSection(newSectionIndex)
+  //   setCurrentQuestionIndex(0)
+  // }
   const handleSectionChange = (newSectionIndex) => {
     if (newSectionIndex === currentSection) return
 
-    // Check for unanswered questions in current section
     const unansweredCount = getUnansweredCount(currentSection)
-    
+
     if (unansweredCount > 0) {
-      isConfirmDialogOpenRef.current = true
-      const confirmed = window.confirm(
-        `You have not attempted ${unansweredCount} question(s) in the current section. Are you sure you want to switch sections?`
-      )
-      isConfirmDialogOpenRef.current = false
-      if (!confirmed) {
-        setTimeout(() => requestFullscreen(), 200)
-        return
-      }
+      setPendingSectionIndex(newSectionIndex)
+      setShowSectionWarningModal(true)
+      return
     }
 
     setCurrentSection(newSectionIndex)
     setCurrentQuestionIndex(0)
   }
-
   if (loading) {
     return (
       <div>
@@ -922,13 +949,13 @@ const ExamAttempt = () => {
 
   return (
     <div>
-      <div style={{ 
+      <div style={{
         filter: isExamBlocked ? 'blur(5px)' : 'none',
         pointerEvents: isExamBlocked ? 'none' : 'auto',
         transition: 'filter 0.3s ease'
       }}>
         <Timer remainingSeconds={remainingTime} onTimeUp={handleTimeUp} />
-        
+
         {/* Violation Counter Display */}
         {submission && submission.status === 'in-progress' && (
           <div style={{
@@ -949,7 +976,7 @@ const ExamAttempt = () => {
           </div>
         )}
       </div>
-      
+
       <div className="container" style={{ paddingTop: '20px', paddingBottom: '100px' }}>
         {/* Exam Blocked Overlay */}
         {isExamBlocked && (
@@ -965,296 +992,295 @@ const ExamAttempt = () => {
             pointerEvents: 'all'
           }} />
         )}
-        
-        <div style={{ 
+
+        <div style={{
           filter: isExamBlocked ? 'blur(5px)' : 'none',
           pointerEvents: isExamBlocked ? 'none' : 'auto',
           transition: 'filter 0.3s ease'
         }}>
-        <div className="page-header">
-          <div>
-            <h1>{exam.title}</h1>
-            <p>{exam.description}</p>
-            <p style={{ color: '#7f8c8d', fontSize: '14px', marginTop: '8px' }}>
-              ⏱️ Duration: {exam.duration} minutes
-            </p>
-          </div>
-        </div>
-
-        {/* Section Navigation */}
-        <div style={{ 
-          display: 'flex', 
-          gap: '10px', 
-          marginBottom: '24px', 
-          borderBottom: '2px solid #ecf0f1',
-          paddingBottom: '10px'
-        }}>
-          {exam.sections.map((section, index) => (
-            <button
-              key={index}
-              onClick={() => handleSectionChange(index)}
-              style={{
-                padding: '10px 20px',
-                border: 'none',
-                borderBottom: currentSection === index ? '3px solid #3498db' : '3px solid transparent',
-                background: currentSection === index ? '#ecf0f1' : 'transparent',
-                cursor: 'pointer',
-                fontWeight: currentSection === index ? 'bold' : 'normal',
-                color: currentSection === index ? '#2c3e50' : '#7f8c8d',
-                transition: 'all 0.3s ease'
-              }}
-            >
-              {section.title}
-            </button>
-          ))}
-        </div>
-
-        {/* Current Section Questions */}
-        {exam.sections[currentSection] && (
-          <div>
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center',
-              marginBottom: '20px'
-            }}>
-              <h2 style={{ margin: 0, color: '#2c3e50' }}>
-                {exam.sections[currentSection].title}
-              </h2>
-              <div style={{ 
-                fontSize: '14px', 
-                fontWeight: 'bold', 
-                color: '#3498db',
-                backgroundColor: '#ecf0f1',
-                padding: '8px 16px',
-                borderRadius: '20px'
-              }}>
-                Attempted: {getAttemptedCount(currentSection)} / {exam.sections[currentSection].questions.length}
-              </div>
-            </div>
-
-            {exam.sections[currentSection].questions.length === 0 ? (
-              <p style={{ color: '#7f8c8d', fontStyle: 'italic' }}>
-                No questions in this section.
+          <div className="page-header">
+            <div>
+              <h1>{exam.title}</h1>
+              <p>{exam.description}</p>
+              <p style={{ color: '#7f8c8d', fontSize: '14px', marginTop: '8px' }}>
+                ⏱️ Duration: {exam.duration} minutes
               </p>
-            ) : (
-              <>
-                {/* Single Question Display */}
-                {(() => {
-                  const question = exam.sections[currentSection].questions[currentQuestionIndex]
-                  const questionId = `${currentSection}-${currentQuestionIndex}`
-                  
-                  return (
-                    <div className="question-container">
-                      <div className="question-header">
-                        <span className="question-number">
-                          Question {currentQuestionIndex + 1} of {exam.sections[currentSection].questions.length}
-                        </span>
-                        <span className="question-marks">{question.marks} marks</span>
-                      </div>
+            </div>
+          </div>
 
-                      <div className="question-text">{question.question}</div>
+          {/* Section Navigation */}
+          <div style={{
+            display: 'flex',
+            gap: '10px',
+            marginBottom: '24px',
+            borderBottom: '2px solid #ecf0f1',
+            paddingBottom: '10px'
+          }}>
+            {exam.sections.map((section, index) => (
+              <button
+                key={index}
+                onClick={() => handleSectionChange(index)}
+                style={{
+                  padding: '10px 20px',
+                  border: 'none',
+                  borderBottom: currentSection === index ? '3px solid #3498db' : '3px solid transparent',
+                  background: currentSection === index ? '#ecf0f1' : 'transparent',
+                  cursor: 'pointer',
+                  fontWeight: currentSection === index ? 'bold' : 'normal',
+                  color: currentSection === index ? '#2c3e50' : '#7f8c8d',
+                  transition: 'all 0.3s ease'
+                }}
+              >
+                {section.title}
+              </button>
+            ))}
+          </div>
 
-                      {question.type === 'mcq' && (
-                        <div className="options-list">
-                          {question.options.map((option, optionIndex) => (
-                            <div
-                              key={optionIndex}
-                              className={`option-item ${
-                                answers[questionId] === option ? 'selected' : ''
-                              }`}
-                              onClick={() =>
-                                handleAnswerChange(currentSection, currentQuestionIndex, option)
-                              }
-                            >
-                              <input
-                                type="radio"
-                                name={questionId}
-                                value={option}
-                                checked={answers[questionId] === option}
-                                onChange={(e) =>
-                                  handleAnswerChange(currentSection, currentQuestionIndex, e.target.value)
-                                }
-                              />
-                              <label>{option}</label>
-                            </div>
-                          ))}
+          {/* Current Section Questions */}
+          {exam.sections[currentSection] && (
+            <div>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '20px'
+              }}>
+                <h2 style={{ margin: 0, color: '#2c3e50' }}>
+                  {exam.sections[currentSection].title}
+                </h2>
+                <div style={{
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  color: '#3498db',
+                  backgroundColor: '#ecf0f1',
+                  padding: '8px 16px',
+                  borderRadius: '20px'
+                }}>
+                  Attempted: {getAttemptedCount(currentSection)} / {exam.sections[currentSection].questions.length}
+                </div>
+              </div>
+
+              {exam.sections[currentSection].questions.length === 0 ? (
+                <p style={{ color: '#7f8c8d', fontStyle: 'italic' }}>
+                  No questions in this section.
+                </p>
+              ) : (
+                <>
+                  {/* Single Question Display */}
+                  {(() => {
+                    const question = exam.sections[currentSection].questions[currentQuestionIndex]
+                    const questionId = `${currentSection}-${currentQuestionIndex}`
+
+                    return (
+                      <div className="question-container">
+                        <div className="question-header">
+                          <span className="question-number">
+                            Question {currentQuestionIndex + 1} of {exam.sections[currentSection].questions.length}
+                          </span>
+                          <span className="question-marks">{question.marks} marks</span>
                         </div>
-                      )}
 
-                      {question.type === 'coding' && (
-                        <div style={{ marginTop: '16px' }}>
-                          <div style={{ 
-                            backgroundColor: '#f8f9fa', 
-                            padding: '16px', 
-                            borderRadius: '8px',
-                            marginBottom: '16px'
-                          }}>
-                            <h4 style={{ marginTop: 0, color: '#2c3e50' }}>
-                              {question.title || 'Coding Problem'}
-                            </h4>
-                            {question.difficulty && (
-                              <span style={{
-                                display: 'inline-block',
-                                padding: '4px 12px',
-                                borderRadius: '12px',
-                                fontSize: '12px',
-                                fontWeight: 'bold',
-                                backgroundColor: question.difficulty === 'Easy' ? '#d4edda' : '#fff3cd',
-                                color: question.difficulty === 'Easy' ? '#155724' : '#856404',
-                                marginBottom: '12px'
-                              }}>
-                                {question.difficulty}
-                              </span>
+                        <div className="question-text">{question.question}</div>
+
+                        {question.type === 'mcq' && (
+                          <div className="options-list">
+                            {question.options.map((option, optionIndex) => (
+                              <div
+                                key={optionIndex}
+                                className={`option-item ${answers[questionId] === option ? 'selected' : ''
+                                  }`}
+                                onClick={() =>
+                                  handleAnswerChange(currentSection, currentQuestionIndex, option)
+                                }
+                              >
+                                <input
+                                  type="radio"
+                                  name={questionId}
+                                  value={option}
+                                  checked={answers[questionId] === option}
+                                  onChange={(e) =>
+                                    handleAnswerChange(currentSection, currentQuestionIndex, e.target.value)
+                                  }
+                                />
+                                <label>{option}</label>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {question.type === 'coding' && (
+                          <div style={{ marginTop: '16px' }}>
+                            <div style={{
+                              backgroundColor: '#f8f9fa',
+                              padding: '16px',
+                              borderRadius: '8px',
+                              marginBottom: '16px'
+                            }}>
+                              <h4 style={{ marginTop: 0, color: '#2c3e50' }}>
+                                {question.title || 'Coding Problem'}
+                              </h4>
+                              {question.difficulty && (
+                                <span style={{
+                                  display: 'inline-block',
+                                  padding: '4px 12px',
+                                  borderRadius: '12px',
+                                  fontSize: '12px',
+                                  fontWeight: 'bold',
+                                  backgroundColor: question.difficulty === 'Easy' ? '#d4edda' : '#fff3cd',
+                                  color: question.difficulty === 'Easy' ? '#155724' : '#856404',
+                                  marginBottom: '12px'
+                                }}>
+                                  {question.difficulty}
+                                </span>
+                              )}
+                              <p style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>
+                                {question.description || question.question}
+                              </p>
+                            </div>
+
+                            {question.testCases && question.testCases.length > 0 && (
+                              <div style={{ marginBottom: '16px' }}>
+                                <strong style={{ display: 'block', marginBottom: '8px' }}>
+                                  Example Test Cases:
+                                </strong>
+                                {question.testCases.slice(0, 2).map((testCase, idx) => (
+                                  <div key={idx} style={{
+                                    backgroundColor: '#f8f9fa',
+                                    padding: '8px 12px',
+                                    borderRadius: '4px',
+                                    marginBottom: '8px',
+                                    fontFamily: 'monospace',
+                                    fontSize: '13px'
+                                  }}>
+                                    <div><strong>Input:</strong> {testCase.input}</div>
+                                    <div><strong>Output:</strong> {testCase.expectedOutput}</div>
+                                  </div>
+                                ))}
+                              </div>
                             )}
-                            <p style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>
-                              {question.description || question.question}
+
+                            <div style={{ marginBottom: '12px' }}>
+                              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+                                Programming Language:
+                              </label>
+                              <select
+                                value={codingLanguages[questionId] || 'python'}
+                                onChange={(e) => handleLanguageChange(currentSection, currentQuestionIndex, e.target.value)}
+                                style={{
+                                  padding: '8px 12px',
+                                  fontSize: '14px',
+                                  border: '1px solid #ddd',
+                                  borderRadius: '4px',
+                                  backgroundColor: '#fff',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                <option value="python">Python</option>
+                                <option value="javascript">JavaScript</option>
+                                <option value="c">C</option>
+                                <option value="cpp">C++</option>
+                                <option value="java">Java</option>
+                              </select>
+                            </div>
+
+                            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+                              Your Code:
+                            </label>
+                            <div style={{
+                              border: '1px solid #ddd',
+                              borderRadius: '4px',
+                              overflow: 'hidden',
+                              marginBottom: '12px'
+                            }}>
+                              <Editor
+                                height="400px"
+                                language={codingLanguages[questionId] || 'python'}
+                                value={answers[questionId] || question.starterCode || getDefaultStarterCode(codingLanguages[questionId] || 'python')}
+                                onChange={(value) => handleAnswerChange(currentSection, currentQuestionIndex, value)}
+                                theme="vs-light"
+                                options={{
+                                  minimap: { enabled: false },
+                                  fontSize: 14,
+                                  lineNumbers: 'on',
+                                  scrollBeyondLastLine: false,
+                                  automaticLayout: true,
+                                  tabSize: 2,
+                                  wordWrap: 'on'
+                                }}
+                              />
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '12px', marginTop: '12px', marginBottom: '16px' }}>
+                              <button
+                                onClick={() => handleSubmitCode(currentSection, currentQuestionIndex)}
+                                className="btn btn-success"
+                                disabled={codeSaving[questionId]}
+                                style={{
+                                  padding: '10px 20px',
+                                  fontSize: '14px',
+                                  opacity: codeSaving[questionId] ? 0.6 : 1,
+                                  cursor: codeSaving[questionId] ? 'not-allowed' : 'pointer'
+                                }}
+                              >
+                                {codeSaving[questionId] === true ? '💾 Saving...' : codeSaving[questionId] === 'saved' ? '✅ Saved!' : codeSaving[questionId] === 'error' ? '❌ Failed' : '💾 Save Code'}
+                              </button>
+                            </div>
+
+                            <p style={{ color: '#7f8c8d', fontSize: '12px', marginTop: '12px' }}>
+                              Note: Click "Save Code" to save your progress.
                             </p>
                           </div>
+                        )}
+                      </div>
+                    )
+                  })()}
 
-                          {question.testCases && question.testCases.length > 0 && (
-                            <div style={{ marginBottom: '16px' }}>
-                              <strong style={{ display: 'block', marginBottom: '8px' }}>
-                                Example Test Cases:
-                              </strong>
-                              {question.testCases.slice(0, 2).map((testCase, idx) => (
-                                <div key={idx} style={{
-                                  backgroundColor: '#f8f9fa',
-                                  padding: '8px 12px',
-                                  borderRadius: '4px',
-                                  marginBottom: '8px',
-                                  fontFamily: 'monospace',
-                                  fontSize: '13px'
-                                }}>
-                                  <div><strong>Input:</strong> {testCase.input}</div>
-                                  <div><strong>Output:</strong> {testCase.expectedOutput}</div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                  {/* Navigation Buttons */}
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    marginTop: '24px',
+                    paddingTop: '20px',
+                    borderTop: '2px solid #ecf0f1'
+                  }}>
+                    <button
+                      onClick={handlePrevious}
+                      className="btn btn-secondary"
+                      disabled={currentQuestionIndex === 0}
+                      style={{
+                        padding: '12px 24px',
+                        fontSize: '16px',
+                        opacity: currentQuestionIndex === 0 ? 0.5 : 1,
+                        cursor: currentQuestionIndex === 0 ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      ← Previous
+                    </button>
 
-                          <div style={{ marginBottom: '12px' }}>
-                            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
-                              Programming Language:
-                            </label>
-                            <select
-                              value={codingLanguages[questionId] || 'python'}
-                              onChange={(e) => handleLanguageChange(currentSection, currentQuestionIndex, e.target.value)}
-                              style={{
-                                padding: '8px 12px',
-                                fontSize: '14px',
-                                border: '1px solid #ddd',
-                                borderRadius: '4px',
-                                backgroundColor: '#fff',
-                                cursor: 'pointer'
-                              }}
-                            >
-                              <option value="python">Python</option>
-                              <option value="javascript">JavaScript</option>
-                              <option value="c">C</option>
-                              <option value="cpp">C++</option>
-                              <option value="java">Java</option>
-                            </select>
-                          </div>
-
-                          <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
-                            Your Code:
-                          </label>
-                          <div style={{ 
-                            border: '1px solid #ddd', 
-                            borderRadius: '4px',
-                            overflow: 'hidden',
-                            marginBottom: '12px'
-                          }}>
-                            <Editor
-                              height="400px"
-                              language={codingLanguages[questionId] || 'python'}
-                              value={answers[questionId] || question.starterCode || getDefaultStarterCode(codingLanguages[questionId] || 'python')}
-                              onChange={(value) => handleAnswerChange(currentSection, currentQuestionIndex, value)}
-                              theme="vs-light"
-                              options={{
-                                minimap: { enabled: false },
-                                fontSize: 14,
-                                lineNumbers: 'on',
-                                scrollBeyondLastLine: false,
-                                automaticLayout: true,
-                                tabSize: 2,
-                                wordWrap: 'on'
-                              }}
-                            />
-                          </div>
-
-                          <div style={{ display: 'flex', gap: '12px', marginTop: '12px', marginBottom: '16px' }}>
-                            <button
-                              onClick={() => handleSubmitCode(currentSection, currentQuestionIndex)}
-                              className="btn btn-success"
-                              disabled={codeSaving[questionId]}
-                              style={{ 
-                                padding: '10px 20px',
-                                fontSize: '14px',
-                                opacity: codeSaving[questionId] ? 0.6 : 1,
-                                cursor: codeSaving[questionId] ? 'not-allowed' : 'pointer'
-                              }}
-                            >
-                              {codeSaving[questionId] ? '💾 Saving...' : '💾 Save Code'}
-                            </button>
-                          </div>
-                          
-                          <p style={{ color: '#7f8c8d', fontSize: '12px', marginTop: '12px' }}>
-                            Note: Click "Save Code" to save your progress.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })()}
-
-                {/* Navigation Buttons */}
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  marginTop: '24px',
-                  paddingTop: '20px',
-                  borderTop: '2px solid #ecf0f1'
-                }}>
-                  <button
-                    onClick={handlePrevious}
-                    className="btn btn-secondary"
-                    disabled={currentQuestionIndex === 0}
-                    style={{
-                      padding: '12px 24px',
-                      fontSize: '16px',
-                      opacity: currentQuestionIndex === 0 ? 0.5 : 1,
-                      cursor: currentQuestionIndex === 0 ? 'not-allowed' : 'pointer'
-                    }}
-                  >
-                    ← Previous
-                  </button>
-                  
-                  <button
-                    onClick={handleNext}
-                    className="btn btn-primary"
-                    disabled={currentQuestionIndex === exam.sections[currentSection].questions.length - 1 && currentSection === exam.sections.length - 1}
-                    style={{
-                      padding: '12px 24px',
-                      fontSize: '16px',
-                      opacity: (currentQuestionIndex === exam.sections[currentSection].questions.length - 1 && currentSection === exam.sections.length - 1) ? 0.5 : 1,
-                      cursor: (currentQuestionIndex === exam.sections[currentSection].questions.length - 1 && currentSection === exam.sections.length - 1) ? 'not-allowed' : 'pointer'
-                    }}
-                  >
-                    {currentQuestionIndex === exam.sections[currentSection].questions.length - 1 && currentSection < exam.sections.length - 1
-                      ? `Next Section (${exam.sections[currentSection + 1].title}) →`
-                      : 'Next →'}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        )}
+                    <button
+                      onClick={handleNext}
+                      className="btn btn-primary"
+                      disabled={currentQuestionIndex === exam.sections[currentSection].questions.length - 1 && currentSection === exam.sections.length - 1}
+                      style={{
+                        padding: '12px 24px',
+                        fontSize: '16px',
+                        opacity: (currentQuestionIndex === exam.sections[currentSection].questions.length - 1 && currentSection === exam.sections.length - 1) ? 0.5 : 1,
+                        cursor: (currentQuestionIndex === exam.sections[currentSection].questions.length - 1 && currentSection === exam.sections.length - 1) ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      {currentQuestionIndex === exam.sections[currentSection].questions.length - 1 && currentSection < exam.sections.length - 1
+                        ? `Next Section (${exam.sections[currentSection + 1].title}) →`
+                        : 'Next →'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div> {/* End blur wrapper */}
       </div>
 
-      <div className="exam-actions" style={{ 
+      <div className="exam-actions" style={{
         filter: isExamBlocked ? 'blur(5px)' : 'none',
         pointerEvents: isExamBlocked ? 'none' : 'auto',
         transition: 'filter 0.3s ease'
@@ -1550,6 +1576,100 @@ const ExamAttempt = () => {
                 Reload
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Section Warning Modal — custom React modal, no window.confirm */}
+      {showSectionWarningModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 10000
+        }}>
+          <div style={{
+            backgroundColor: '#fff', borderRadius: '8px',
+            padding: '36px 40px', maxWidth: '460px', width: '90%',
+            textAlign: 'center', boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
+            border: '3px solid #f39c12'
+          }}>
+            <div style={{ fontSize: '40px', marginBottom: '12px' }}>⚠️</div>
+            <h2 style={{ color: '#e67e22', marginTop: 0, marginBottom: '12px' }}>
+              Unanswered Questions
+            </h2>
+            <p style={{ color: '#333', fontSize: '16px', marginBottom: '8px' }}>
+              You have attempted <strong>{getAttemptedCount(currentSection)}</strong> out of{' '}
+              <strong>{exam?.sections[currentSection]?.questions?.length}</strong> questions
+              in the <strong>{exam?.sections[currentSection]?.title}</strong> section.
+            </p>
+            <p style={{ color: '#666', fontSize: '14px', marginBottom: '24px' }}>
+              Are you sure you want to leave? You can go back to attempt the remaining questions.
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button
+                onClick={() => {
+                  setShowSectionWarningModal(false)
+                  setPendingSectionIndex(null)
+                }}
+                style={{
+                  padding: '10px 24px', borderRadius: '6px', border: '2px solid #3498db',
+                  backgroundColor: '#fff', color: '#3498db',
+                  fontSize: '15px', fontWeight: 'bold', cursor: 'pointer'
+                }}
+              >
+                ← Go Back to Attempt
+              </button>
+              <button
+                onClick={() => {
+                  setShowSectionWarningModal(false)
+                  setCurrentSection(pendingSectionIndex)
+                  setCurrentQuestionIndex(0)
+                  setPendingSectionIndex(null)
+                }}
+                style={{
+                  padding: '10px 24px', borderRadius: '6px', border: 'none',
+                  backgroundColor: '#e67e22', color: '#fff',
+                  fontSize: '15px', fontWeight: 'bold', cursor: 'pointer'
+                }}
+              >
+                Continue Anyway →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Write Code Warning Modal */}
+      {showWriteCodeModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 10000
+        }}>
+          <div style={{
+            backgroundColor: '#fff', borderRadius: '8px',
+            padding: '36px 40px', maxWidth: '400px', width: '90%',
+            textAlign: 'center', boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
+            border: '3px solid #e74c3c'
+          }}>
+            <div style={{ fontSize: '40px', marginBottom: '12px' }}>✏️</div>
+            <h2 style={{ color: '#e74c3c', marginTop: 0, marginBottom: '12px' }}>
+              No Code Written
+            </h2>
+            <p style={{ color: '#333', fontSize: '16px', marginBottom: '24px' }}>
+              Please write your code before saving.
+            </p>
+            <button
+              onClick={() => setShowWriteCodeModal(false)}
+              style={{
+                padding: '10px 32px', borderRadius: '6px', border: 'none',
+                backgroundColor: '#3498db', color: '#fff',
+                fontSize: '15px', fontWeight: 'bold', cursor: 'pointer'
+              }}
+            >
+              OK, Go Back
+            </button>
           </div>
         </div>
       )}

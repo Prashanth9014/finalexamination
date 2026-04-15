@@ -643,7 +643,7 @@ export async function getSubmissionById(
   }
 
   // Admin can view any submission, candidate can only view their own
-  if (userRole !== 'admin' && submission.userId._id.toString() !== userId.toString()) {
+  if (userRole !== 'admin' && userRole !== 'superadmin' && submission.userId._id.toString() !== userId.toString()) {
     console.log('❌ Unauthorized access attempt');
     throw new Error('Unauthorized: You can only view your own submissions');
   }
