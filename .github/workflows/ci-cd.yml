@@ -54,6 +54,7 @@ jobs:
 
     steps:
     - name: Deploy Application
+      shell: powershell
       run: |
-        cd "C:\Users\botte\OneDrive\Desktop\finalexamination-yesterday"
-        ./deploy.bat
+        Set-Location "C:\Users\botte\OneDrive\Desktop\finalexamination-yesterday"
+        .\deploy.bat
