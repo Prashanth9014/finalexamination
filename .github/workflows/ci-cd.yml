@@ -56,6 +56,11 @@ jobs:
         shell: cmd
 
     steps:
+    - name: Setup Environment
+      run: |
+        set PATH=%PATH%;C:\Windows\System32\WindowsPowerShell\v1.0
+        echo %PATH%
+    
     - name: Deploy Application
       run: |
         C:\Users\botte\OneDrive\Desktop\finalexamination-yesterday\deploy.bat
