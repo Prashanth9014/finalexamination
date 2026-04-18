@@ -55,5 +55,5 @@ jobs:
     steps:
     - name: Deploy Application
       run: |
-        cd "C:\Users\botte\OneDrive\Desktop\finalexamination"
+        cd "C:\Users\botte\OneDrive\Desktop\finalexamination-yesterday"
         ./deploy.bat
