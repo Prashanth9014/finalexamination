@@ -56,11 +56,7 @@ jobs:
     - name: Navigate and Deploy
       shell: cmd
       run: |
-        cd /d "C:\Users\botte\OneDrive\Desktop\finalexamination-yesterday"
-        dir
-        git status
-        git pull origin main
-        cd server
+        cd /d "C:\Users\botte\OneDrive\Desktop\finalexamination-yesterday\server"
         call npm install
         call npm run build
         call pm2 restart exam-app
