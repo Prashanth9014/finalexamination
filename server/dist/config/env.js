@@ -18,7 +18,7 @@ else {
 }
 const LOCAL_MONGO_URI = 'mongodb://localhost:27017/online_recruit_system';
 function loadEnv() {
-    const { NODE_ENV = 'development', PORT = '5000', MONGODB_URI, USE_LOCAL_MONGO, JWT_SECRET, CORS_ORIGIN, EMAIL_USER, EMAIL_PASSWORD, EMAIL_HOST = 'smtp.gmail.com', EMAIL_PORT = '587', EMAIL_SECURE = 'false', USE_MAILTRAP = 'false', MAILTRAP_USER, MAILTRAP_PASSWORD, } = process.env;
+    const { NODE_ENV = 'development', PORT = '5000', MONGODB_URI, USE_LOCAL_MONGO, JWT_SECRET, CORS_ORIGIN, EMAIL_USER, EMAIL_PASSWORD, EMAIL_HOST = 'smtp.gmail.com', EMAIL_PORT = '587', EMAIL_SECURE = 'false', USE_MAILTRAP = 'false', MAILTRAP_USER, MAILTRAP_PASSWORD, FRONTEND_URL, } = process.env;
     const isProd = NODE_ENV === 'production';
     // Production: require MONGODB_URI; no local fallback
     let mongoUri;
@@ -63,5 +63,6 @@ function loadEnv() {
         USE_MAILTRAP: useMailtrap,
         MAILTRAP_USER: MAILTRAP_USER,
         MAILTRAP_PASSWORD: MAILTRAP_PASSWORD,
+        FRONTEND_URL: FRONTEND_URL || 'http://localhost:3003',
     };
 }

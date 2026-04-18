@@ -10,6 +10,10 @@ router.post('/start/:examId', auth_middleware_1.authenticate, (0, auth_middlewar
 router.post('/submit/:submissionId', auth_middleware_1.authenticate, (0, auth_middleware_1.requireRole)('candidate'), submission_controller_1.submitExamHandler);
 // POST /api/submissions/:submissionId/save-code - Candidate only: save coding answer
 router.post('/:submissionId/save-code', auth_middleware_1.authenticate, (0, auth_middleware_1.requireRole)('candidate'), submission_controller_1.saveCodingAnswerHandler);
+// POST /api/submissions/:submissionId/save-mcq - Candidate only: save MCQ answer
+router.post('/:submissionId/save-mcq', auth_middleware_1.authenticate, (0, auth_middleware_1.requireRole)('candidate'), submission_controller_1.saveMcqAnswerHandler);
+// GET /api/submissions/:submissionId/saved-answers - Candidate only: get saved answers
+router.get('/:submissionId/saved-answers', auth_middleware_1.authenticate, (0, auth_middleware_1.requireRole)('candidate'), submission_controller_1.getSavedAnswersHandler);
 // GET /api/submissions/my - Candidate only: get my submissions
 router.get('/my', auth_middleware_1.authenticate, (0, auth_middleware_1.requireRole)('candidate'), submission_controller_1.getMySubmissionsHandler);
 // GET /api/submissions/all - Admin or Superadmin only: get all submissions

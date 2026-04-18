@@ -10,7 +10,7 @@ const env_1 = require("./config/env");
 const logger_1 = require("./utils/logger");
 const env = (0, env_1.loadEnv)();
 const PORT = env.PORT || 5000;
-const LOCAL_MONGO_URI = 'mongodb://localhost:27017/online_recruit_system';
+const LOCAL_MONGODB_URI = 'mongodb://localhost:27017/examdb';
 function srvToStandardUri(srvUri) {
     try {
         const match = srvUri.match(/mongodb\+srv:\/\/([^:]+):([^@]+)@([^/]+)\/([^?]*)(\?.*)?/);
@@ -53,7 +53,7 @@ async function connectMongo() {
                 logger_1.logger.warn('Standard Atlas failed. Trying local MongoDB...');
             }
             try {
-                await mongoose_1.default.connect(LOCAL_MONGO_URI, options);
+                await mongoose_1.default.connect(env.MONGODB_URI, options);
                 logger_1.logger.info('Connected to MongoDB (local)');
             }
             catch {
@@ -70,7 +70,7 @@ async function start() {
     try {
         await connectMongo();
         const server = http_1.default.createServer(app_1.default);
-        server.listen(PORT, () => {
+        server.listen(PORT, '0.0.0.0', () => {
             logger_1.logger.info(`Server running on port ${PORT}`, { NODE_ENV: env.NODE_ENV });
         });
         server.on('error', (error) => {

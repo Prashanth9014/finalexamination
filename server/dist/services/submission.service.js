@@ -3,6 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.startExam = startExam;
 exports.submitExam = submitExam;
 exports.saveCodingAnswer = saveCodingAnswer;
+exports.saveMcqAnswer = saveMcqAnswer;
+exports.getSavedAnswers = getSavedAnswers;
 exports.getMySubmissions = getMySubmissions;
 exports.getSubmissionById = getSubmissionById;
 exports.getAllSubmissions = getAllSubmissions;
@@ -114,8 +116,17 @@ If you wish to reattempt, please contact the admin.`);
         examId: submissionData.examId.toString(),
         status: submissionData.status
     }));
-    const submission = await Submission_1.Submission.create(submissionData);
-    console.log('Submission created successfully!');
+    // Use findOneAndUpdate with upsert to atomically create-or-fetch the submission.
+    // This prevents the E11000 duplicate key error that occurs when two concurrent
+    // requests (e.g. React StrictMode double-invoke) both pass the "no existing
+    // submission" check and then both try to insert the same userId+examId pair.
+    // $setOnInsert only writes the fields when the document is being CREATED,
+    // so an already-existing in-progress submission is never overwritten.
+    const submission = await Submission_1.Submission.findOneAndUpdate({ userId, examId: examObjectId }, { $setOnInsert: submissionData }, { upsert: true, new: true, setDefaultsOnInsert: true });
+    if (!submission) {
+        throw new Error('Failed to create or retrieve submission');
+    }
+    console.log('Submission created/retrieved successfully!');
     console.log('Submission _id:', submission._id);
     console.log('Submission examId:', submission.examId);
     console.log('Submission userId:', submission.userId);
@@ -221,6 +232,74 @@ async function saveCodingAnswer(submissionId, userId, input) {
     console.log('Saved answer:', submission.answers.find(a => a.questionId === input.questionId));
     console.log('=== END SAVE CODING ANSWER SERVICE ===');
     return submission;
+}
+async function saveMcqAnswer(submissionId, userId, input) {
+    console.log('=== SAVE MCQ ANSWER SERVICE ===');
+    console.log('Input:', {
+        submissionId,
+        userId: userId.toString(),
+        questionId: input.questionId,
+        selectedOption: input.selectedOption
+    });
+    if (!mongoose_1.Types.ObjectId.isValid(submissionId)) {
+        throw new Error('Invalid submission ID');
+    }
+    const submission = await Submission_1.Submission.findById(submissionId).exec();
+    if (!submission) {
+        throw new Error('Submission not found');
+    }
+    console.log('Found submission:', submission._id);
+    // Verify ownership
+    if (submission.userId.toString() !== userId.toString()) {
+        throw new Error('Unauthorized: This is not your submission');
+    }
+    // Check if already submitted
+    if (submission.status === 'submitted') {
+        throw new Error('Cannot save answer after submission is completed');
+    }
+    // Find existing answer for this question
+    const existingAnswerIndex = submission.answers.findIndex((answer) => answer.questionId === input.questionId);
+    console.log('Existing answer index:', existingAnswerIndex);
+    const mcqAnswer = {
+        questionId: input.questionId,
+        selectedOption: input.selectedOption,
+    };
+    if (existingAnswerIndex >= 0) {
+        // Update existing answer
+        console.log('Updating existing MCQ answer at index:', existingAnswerIndex);
+        submission.answers[existingAnswerIndex] = mcqAnswer;
+    }
+    else {
+        // Add new answer
+        console.log('Adding new MCQ answer');
+        submission.answers.push(mcqAnswer);
+    }
+    console.log('Saving submission...');
+    await submission.save();
+    console.log('✅ MCQ answer saved successfully!');
+    console.log('=== END SAVE MCQ ANSWER SERVICE ===');
+    return submission;
+}
+async function getSavedAnswers(submissionId, userId) {
+    console.log('=== GET SAVED ANSWERS SERVICE ===');
+    console.log('Input:', {
+        submissionId,
+        userId: userId.toString()
+    });
+    if (!mongoose_1.Types.ObjectId.isValid(submissionId)) {
+        throw new Error('Invalid submission ID');
+    }
+    const submission = await Submission_1.Submission.findById(submissionId).exec();
+    if (!submission) {
+        throw new Error('Submission not found');
+    }
+    // Verify ownership
+    if (submission.userId.toString() !== userId.toString()) {
+        throw new Error('Unauthorized: This is not your submission');
+    }
+    console.log('Found submission with', submission.answers.length, 'saved answers');
+    console.log('=== END GET SAVED ANSWERS SERVICE ===');
+    return submission.answers;
 }
 async function calculateScore(exam, answers) {
     // Create a map of answers for quick lookup
@@ -407,7 +486,7 @@ async function getSubmissionById(submissionId, userId, userRole) {
         console.log('⚠️ No answers found in submission');
     }
     // Admin can view any submission, candidate can only view their own
-    if (userRole !== 'admin' && submission.userId._id.toString() !== userId.toString()) {
+    if (userRole !== 'admin' && userRole !== 'superadmin' && submission.userId._id.toString() !== userId.toString()) {
         console.log('❌ Unauthorized access attempt');
         throw new Error('Unauthorized: You can only view your own submissions');
     }

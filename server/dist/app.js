@@ -20,11 +20,43 @@ function createApp(corsOrigin) {
     const app = (0, express_1.default)();
     // Disable ETags globally to prevent 304 responses
     app.set('etag', false);
-    app.use((0, helmet_1.default)());
+    // Trust proxy for network access
+    app.set('trust proxy', true);
+    // Add middleware for network access
+    app.use((req, res, next) => {
+        // Add headers for network access
+        res.header('Access-Control-Allow-Origin', '*');
+        res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+        res.header('Access-Control-Allow-Credentials', 'true');
+        // Handle preflight requests
+        if (req.method === 'OPTIONS') {
+            res.sendStatus(200);
+        }
+        else {
+            next();
+        }
+    });
+    app.use((0, helmet_1.default)({
+        crossOriginEmbedderPolicy: false,
+        contentSecurityPolicy: false,
+    }));
     app.use(express_1.default.json({ limit: '1mb' }));
     const corsOptions = corsOrigin === '*'
-        ? { origin: true }
-        : { origin: corsOrigin.split(',').map((o) => o.trim()), credentials: true };
+        ? {
+            origin: true,
+            credentials: true,
+            optionsSuccessStatus: 200,
+            methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+            allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+        }
+        : {
+            origin: corsOrigin.split(',').map((o) => o.trim()),
+            credentials: true,
+            optionsSuccessStatus: 200,
+            methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+            allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+        };
     app.use((0, cors_1.default)(corsOptions));
     if (process.env.NODE_ENV === 'production') {
         app.use((0, morgan_1.default)('combined'));
@@ -52,6 +84,21 @@ function createApp(corsOrigin) {
     app.use('/api/exams', exam_routes_1.default);
     app.use('/api/submissions', submission_routes_1.default);
     app.use('/api/code', codeExecution_routes_1.default);
+    // Network discovery endpoint
+    app.get('/api/network-info', (_req, res) => {
+        res.json({
+            status: 'ok',
+            server: 'online-recruit-system',
+            timestamp: new Date().toISOString(),
+            network: {
+                host: '192.168.29.174',
+                ports: {
+                    frontend: 3003,
+                    backend: 5050
+                }
+            }
+        });
+    });
     app.get('/api/health', async (_req, res) => {
         const dbState = mongoose_1.default.connection.readyState;
         const healthy = dbState === 1;

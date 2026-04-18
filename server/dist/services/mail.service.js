@@ -144,7 +144,7 @@ async function sendResetPasswordEmail(input) {
             }
         }
         // Build reset link
-        const resetLink = `http://localhost:3001/reset-password/${resetToken}`;
+        const resetLink = `${env.FRONTEND_URL}/reset-password/${resetToken}`;
         console.log(`[MAIL] Reset link generated: ${resetLink.substring(0, 50)}...`);
         const mailOptions = {
             from: env.EMAIL_USER,

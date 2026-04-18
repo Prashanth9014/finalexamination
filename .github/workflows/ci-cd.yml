@@ -39,8 +39,7 @@ jobs:
       run: cd server && npm run build
 
     - name: Run Jest tests
-      run: echo "Tests skipped for CI/CD testing"
-      # Temporarily disabled: cd server && npm test
+      run: cd server && npm test
       env:
         NODE_ENV: test
         MONGODB_URI: mongodb://localhost:27017/test_db

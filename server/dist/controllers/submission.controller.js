@@ -39,6 +39,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.startExamHandler = startExamHandler;
 exports.submitExamHandler = submitExamHandler;
 exports.saveCodingAnswerHandler = saveCodingAnswerHandler;
+exports.saveMcqAnswerHandler = saveMcqAnswerHandler;
+exports.getSavedAnswersHandler = getSavedAnswersHandler;
 exports.getMySubmissionsHandler = getMySubmissionsHandler;
 exports.getSubmissionByIdHandler = getSubmissionByIdHandler;
 exports.getAllSubmissionsHandler = getAllSubmissionsHandler;
@@ -169,6 +171,96 @@ async function saveCodingAnswerHandler(req, res, next) {
                 'Invalid submission ID',
                 'Submission not found',
                 'Cannot save code after submission is completed',
+            ];
+            if (knownErrors.includes(error.message)) {
+                res.status(400).json({ message: error.message });
+                return;
+            }
+            if (error.message.includes('Unauthorized')) {
+                res.status(403).json({ message: error.message });
+                return;
+            }
+        }
+        next(error);
+    }
+}
+async function saveMcqAnswerHandler(req, res, next) {
+    try {
+        console.log('=== SAVE MCQ ANSWER HANDLER ===');
+        console.log('Request body:', JSON.stringify(req.body, null, 2));
+        console.log('Submission ID:', req.params.submissionId);
+        console.log('User ID:', req.user.userId);
+        const { submissionId } = req.params;
+        const userId = new mongoose_1.default.Types.ObjectId(req.user.userId);
+        const { questionId, selectedOption } = req.body;
+        console.log('Parsed data:', {
+            questionId,
+            selectedOption
+        });
+        if (!questionId || !selectedOption) {
+            console.log('❌ Missing required fields');
+            res.status(400).json({ message: 'Missing required fields: questionId, selectedOption' });
+            return;
+        }
+        const input = {
+            questionId,
+            selectedOption,
+        };
+        console.log('Calling saveMcqAnswer service...');
+        const submission = await (0, submission_service_1.saveMcqAnswer)(submissionId, userId, input);
+        console.log('✅ MCQ answer saved successfully!');
+        console.log('=== END SAVE MCQ ANSWER HANDLER ===');
+        res.status(200).json({
+            message: 'MCQ answer saved successfully',
+            submission,
+        });
+    }
+    catch (error) {
+        console.error('=== SAVE MCQ ANSWER ERROR ===');
+        console.error('Error:', error);
+        console.error('=== END ERROR ===');
+        if (error instanceof Error) {
+            const knownErrors = [
+                'Invalid submission ID',
+                'Submission not found',
+                'Cannot save answer after submission is completed',
+            ];
+            if (knownErrors.includes(error.message)) {
+                res.status(400).json({ message: error.message });
+                return;
+            }
+            if (error.message.includes('Unauthorized')) {
+                res.status(403).json({ message: error.message });
+                return;
+            }
+        }
+        next(error);
+    }
+}
+async function getSavedAnswersHandler(req, res, next) {
+    try {
+        console.log('=== GET SAVED ANSWERS HANDLER ===');
+        console.log('Submission ID:', req.params.submissionId);
+        console.log('User ID:', req.user.userId);
+        const { submissionId } = req.params;
+        const userId = new mongoose_1.default.Types.ObjectId(req.user.userId);
+        console.log('Calling getSavedAnswers service...');
+        const answers = await (0, submission_service_1.getSavedAnswers)(submissionId, userId);
+        console.log('✅ Retrieved', answers.length, 'saved answers');
+        console.log('=== END GET SAVED ANSWERS HANDLER ===');
+        res.status(200).json({
+            message: 'Saved answers retrieved successfully',
+            answers,
+        });
+    }
+    catch (error) {
+        console.error('=== GET SAVED ANSWERS ERROR ===');
+        console.error('Error:', error);
+        console.error('=== END ERROR ===');
+        if (error instanceof Error) {
+            const knownErrors = [
+                'Invalid submission ID',
+                'Submission not found',
             ];
             if (knownErrors.includes(error.message)) {
                 res.status(400).json({ message: error.message });
