@@ -48,17 +48,12 @@ jobs:
 
   cd:
     name: Continuous Deployment
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: ci
     if: success()
 
     steps:
-    - name: Deploy to Local Server
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.HOST }}
-        username: ${{ secrets.USERNAME }}
-        password: ${{ secrets.PASSWORD }}
-        script: |
-          cd "C:\Users\botte\OneDrive\Desktop\finalexamination"
-          ./deploy.bat
+    - name: Deploy Application
+      run: |
+        cd "C:\Users\botte\OneDrive\Desktop\finalexamination"
+        ./deploy.bat
