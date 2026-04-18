@@ -55,4 +55,9 @@ jobs:
     steps:
     - name: Deploy Application
       run: |
-        C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -Command "Set-Location 'C:\Users\botte\OneDrive\Desktop\finalexamination-yesterday'; .\deploy.bat"
+        cd /d "C:\Users\botte\OneDrive\Desktop\finalexamination-yesterday"
+        git pull origin main
+        cd server
+        npm install
+        npm run build
+        pm2 restart exam-app
