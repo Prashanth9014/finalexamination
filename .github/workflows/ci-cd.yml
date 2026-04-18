@@ -59,4 +59,4 @@ jobs:
         password: ${{ secrets.PASSWORD }}
         script: |
           cd "C:\Users\botte\OneDrive\Desktop\finalexamination"
-          deploy.bat
+          ./deploy.bat
