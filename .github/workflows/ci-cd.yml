@@ -51,16 +51,16 @@ jobs:
     runs-on: self-hosted
     needs: ci
     if: success()
-    defaults:
-      run:
-        shell: cmd
 
     steps:
-    - name: Setup Environment
+    - name: Navigate and Deploy
+      shell: cmd
       run: |
-        set PATH=%PATH%;C:\Windows\System32\WindowsPowerShell\v1.0
-        echo %PATH%
-    
-    - name: Deploy Application
-      run: |
-        C:\Users\botte\OneDrive\Desktop\finalexamination-yesterday\deploy.bat
+        cd /d "C:\Users\botte\OneDrive\Desktop\finalexamination-yesterday"
+        dir
+        git status
+        git pull origin main
+        cd server
+        call npm install
+        call npm run build
+        call pm2 restart exam-app
