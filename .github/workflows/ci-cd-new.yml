@@ -1,13 +1,13 @@
-name: CI/CD Pipeline
-# Complete full-stack CI/CD implementation
+name: Deploy Pipeline
+# Clean deployment pipeline without tests
 
 on:
   push:
     branches: [main]
 
 jobs:
-  ci:
-    name: Continuous Integration
+  build:
+    name: Build Application
     runs-on: ubuntu-latest
 
     steps:
@@ -23,28 +23,28 @@ jobs:
           server/package-lock.json
           client/package-lock.json
 
-    # Backend CI Steps
+    # Backend Build Steps
     - name: Install Backend Dependencies
       run: cd server && npm ci
 
     - name: Build Backend Project
       run: cd server && npm run build
 
-    # Frontend CI Steps
+    # Frontend Build Steps
     - name: Install Frontend Dependencies
       run: cd client && npm ci
 
     - name: Build Frontend Project
       run: cd client && npm run build
-      
-  cd:
-    name: Continuous Deployment
+
+  deploy:
+    name: Deploy to Server
     runs-on: self-hosted
-    needs: ci
+    needs: build
     if: success()
 
     steps:
-    - name: Deploy Full Application
+    - name: Deploy Application
       shell: cmd
       run: |
         cd /d "C:\Users\botte\OneDrive\Desktop\finalexamination-yesterday"
@@ -63,3 +63,4 @@ jobs:
         echo [6/6] Restarting backend application...
         cd ../server
         call pm2 restart exam-app
+        echo Deployment completed successfully!
