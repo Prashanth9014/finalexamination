@@ -11,7 +11,7 @@ export default defineConfig({
         allowedHosts: true,
         proxy: {
             '/api': {
-                target: 'http://192.168.29.174:5050',
+                target: 'http://192.168.29.108:5050',
                 changeOrigin: true,
                 secure: false,
                 ws: true,
@@ -33,4 +33,18 @@ export default defineConfig({
         host: '0.0.0.0',
         port: 3003,
     },
+    test: {
+        environment: 'jsdom',
+        setupFiles: ['./src/tests/setupTests.js'],
+        globals: true,
+        css: true,
+        coverage: {
+            reporter: ['text', 'json', 'html'],
+            exclude: [
+                'node_modules/',
+                'src/tests/',
+                'src/main.jsx'
+            ]
+        }
+    }
 })

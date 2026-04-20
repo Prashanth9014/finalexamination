@@ -1,12 +1,13 @@
+import { describe, test, expect, beforeEach, vi } from 'vitest';
 import authService from '../services/authService';
 import api from '../services/api';
 
 // Mock the api module
-jest.mock('../services/api');
+vi.mock('../services/api');
 
 describe('Auth Service', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     localStorage.clear();
   });
 

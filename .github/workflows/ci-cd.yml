@@ -1,5 +1,5 @@
 name: CI/CD Pipeline
-# Final test - all systems ready
+# Complete full-stack CI/CD implementation
 
 on:
   push:
@@ -30,20 +30,35 @@ jobs:
       with:
         node-version: '18'
         cache: 'npm'
-        cache-dependency-path: server/package-lock.json
+        cache-dependency-path: |
+          server/package-lock.json
+          client/package-lock.json
 
-    - name: Install dependencies
+    # Backend CI Steps
+    - name: Install Backend Dependencies
       run: cd server && npm ci
 
-    - name: Build project
+    - name: Build Backend Project
       run: cd server && npm run build
 
-    - name: Run Jest tests
-      run: cd server && npm test
+    - name: Run Backend Tests
+      run: cd server && npm test -- --testPathPattern="utils"
       env:
         NODE_ENV: test
         MONGODB_URI: mongodb://localhost:27017/test_db
         JWT_SECRET: test-secret-key-for-ci-pipeline-minimum-32-chars
+
+    # Frontend CI Steps
+    - name: Install Frontend Dependencies
+      run: cd client && npm ci
+
+    - name: Build Frontend Project
+      run: cd client && npm run build
+
+    - name: Run Frontend Tests
+      run: cd client && npm run test:run
+      env:
+        NODE_ENV: test
 
   cd:
     name: Continuous Deployment
@@ -52,10 +67,22 @@ jobs:
     if: success()
 
     steps:
-    - name: Navigate and Deploy
+    - name: Deploy Full Application
       shell: cmd
       run: |
-        cd /d "C:\Users\botte\OneDrive\Desktop\finalexamination-yesterday\server"
+        cd /d "C:\Users\botte\OneDrive\Desktop\finalexamination-yesterday"
+        echo [1/6] Pulling latest code...
+        git pull origin main
+        echo [2/6] Installing backend dependencies...
+        cd server
         call npm install
+        echo [3/6] Building backend...
         call npm run build
+        echo [4/6] Installing frontend dependencies...
+        cd ../client
+        call npm install
+        echo [5/6] Building frontend...
+        call npm run build
+        echo [6/6] Restarting backend application...
+        cd ../server
         call pm2 restart exam-app

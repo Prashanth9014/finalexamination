@@ -99,7 +99,7 @@ export function createApp(corsOrigin: string): Application {
       server: 'online-recruit-system',
       timestamp: new Date().toISOString(),
       network: {
-        host: '192.168.29.174',
+        host: '192.168.29.108',
         ports: {
           frontend: 3003,
           backend: 5050

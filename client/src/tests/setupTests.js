@@ -1,20 +1,21 @@
 import '@testing-library/jest-dom';
+import { vi } from 'vitest';
 
 // Mock localStorage
 const localStorageMock = {
-  getItem: jest.fn(),
-  setItem: jest.fn(),
-  removeItem: jest.fn(),
-  clear: jest.fn(),
+  getItem: vi.fn(),
+  setItem: vi.fn(),
+  removeItem: vi.fn(),
+  clear: vi.fn(),
 };
 global.localStorage = localStorageMock;
 
 // Mock sessionStorage
 const sessionStorageMock = {
-  getItem: jest.fn(),
-  setItem: jest.fn(),
-  removeItem: jest.fn(),
-  clear: jest.fn(),
+  getItem: vi.fn(),
+  setItem: vi.fn(),
+  removeItem: vi.fn(),
+  clear: vi.fn(),
 };
 global.sessionStorage = sessionStorageMock;
 
@@ -26,15 +27,15 @@ window.location = {
   pathname: '/',
   search: '',
   hash: '',
-  assign: jest.fn(),
-  replace: jest.fn(),
-  reload: jest.fn(),
+  assign: vi.fn(),
+  replace: vi.fn(),
+  reload: vi.fn(),
 };
 
 // Mock window.alert, confirm, prompt
-global.alert = jest.fn();
-global.confirm = jest.fn();
-global.prompt = jest.fn();
+global.alert = vi.fn();
+global.confirm = vi.fn();
+global.prompt = vi.fn();
 
 // Mock IntersectionObserver
 global.IntersectionObserver = class IntersectionObserver {

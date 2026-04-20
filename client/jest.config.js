@@ -1,4 +1,4 @@
-module.exports = {
+export default {
   testEnvironment: 'jsdom',
   roots: ['<rootDir>/src'],
   testMatch: [
@@ -35,5 +35,11 @@ module.exports = {
     'html'
   ],
   testTimeout: 10000,
-  verbose: true
+  verbose: true,
+  extensionsToTreatAsEsm: ['.jsx'],
+  globals: {
+    'ts-jest': {
+      useESM: true
+    }
+  }
 };
