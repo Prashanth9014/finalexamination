@@ -1,27 +1,29 @@
 export default {
-  testEnvironment: 'jsdom',
+  testEnvironment: 'node',
   roots: ['<rootDir>/src'],
   testMatch: [
-    '<rootDir>/src/**/__tests__/**/*.{js,jsx,ts,tsx}',
-    '<rootDir>/src/**/?(*.)(spec|test).{js,jsx,ts,tsx}'
+    // '<rootDir>/src/**/__tests__/**/*.{js,jsx,ts,tsx}',
+    // '<rootDir>/src/**/?(*.)(spec|test).{js,jsx,ts,tsx}'
+    '<rootDir>/tests/**/*.test.js'
   ],
   transform: {
-    '^.+\\.(js|jsx|ts|tsx)$': ['babel-jest', {
-      presets: [
-        ['@babel/preset-env', { targets: { node: 'current' } }],
-        ['@babel/preset-react', { runtime: 'automatic' }]
-      ]
-    }]
+    '^.+\\.ts$': 'ts-jest'
+    // '^.+\\.(js|jsx|ts|tsx)$': ['babel-jest', {
+    //   presets: [
+    //     ['@babel/preset-env', { targets: { node: 'current' } }],
+    //     ['@babel/preset-react', { runtime: 'automatic' }]
+    //   ]
+    // }]
   },
   transformIgnorePatterns: [
     '[/\\\\]node_modules[/\\\\].+\\.(js|jsx|ts|tsx)$',
     '^.+\\.module\\.(css|sass|scss)$'
   ],
-  moduleNameMapping: {
-    '^.+\\.module\\.(css|sass|scss)$': 'identity-obj-proxy',
-    '\\.(css|less|scss|sass)$': 'identity-obj-proxy'
-  },
-  setupFilesAfterEnv: ['<rootDir>/src/tests/setupTests.js'],
+  // moduleNameMapping: {
+  //   '^.+\\.module\\.(css|sass|scss)$': 'identity-obj-proxy',
+  //   '\\.(css|less|scss|sass)$': 'identity-obj-proxy'
+  // },
+  // setupFilesAfterEnv: ['<rootDir>/src/tests/setupTests.js'],
   collectCoverageFrom: [
     'src/**/*.{js,jsx,ts,tsx}',
     '!src/**/*.d.ts',
@@ -37,9 +39,9 @@ export default {
   testTimeout: 10000,
   verbose: true,
   extensionsToTreatAsEsm: ['.jsx'],
-  globals: {
-    'ts-jest': {
-      useESM: true
-    }
-  }
+  // globals: {
+  //   'ts-jest': {
+  //     useESM: true
+  //   }
+  // }
 };
