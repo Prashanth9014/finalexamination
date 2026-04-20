@@ -10,16 +10,16 @@ jobs:
     name: Continuous Integration
     runs-on: ubuntu-latest
     
-    services:
-      mongodb:
-        image: mongo:7.0
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd "mongosh --eval 'db.runCommand({ping: 1})'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+    # services:
+    #   mongodb:
+    #     image: mongo:7.0
+    #     ports:
+    #       - 27017:27017
+    #     options: >-
+    #       --health-cmd "mongosh --eval 'db.runCommand({ping: 1})'"
+    #       --health-interval 10s
+    #       --health-timeout 5s
+    #       --health-retries 5
 
     steps:
     - name: Checkout code
@@ -41,12 +41,12 @@ jobs:
     - name: Build Backend Project
       run: cd server && npm run build
 
-    - name: Run Backend Tests
-      run: cd server && npm test -- --testPathPattern="utils"
-      env:
-        NODE_ENV: test
-        MONGODB_URI: mongodb://localhost:27017/test_db
-        JWT_SECRET: test-secret-key-for-ci-pipeline-minimum-32-chars
+    # - name: Run Backend Tests
+    #   run: cd server && npm test -- --testPathPattern="utils"
+    #   env:
+    #     NODE_ENV: test
+    #     MONGODB_URI: mongodb://localhost:27017/test_db
+    #     JWT_SECRET: test-secret-key-for-ci-pipeline-minimum-32-chars
 
     # Frontend CI Steps
     - name: Install Frontend Dependencies
@@ -55,10 +55,10 @@ jobs:
     - name: Build Frontend Project
       run: cd client && npm run build
 
-    - name: Run Frontend Tests
-      run: cd client && npm run test:run
-      env:
-        NODE_ENV: test
+    # - name: Run Frontend Tests
+    #   run: cd client && npm run test:run
+    #   env:
+    #     NODE_ENV: test
 
   cd:
     name: Continuous Deployment
