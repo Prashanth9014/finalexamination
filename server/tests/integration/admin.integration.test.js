@@ -67,11 +67,16 @@ describe('Admin Integration Tests', () => {
       expect(response.body.user.role).toBe('admin');
       expect(response.body.token).toBeDefined();
 
-      // Ensure all database operations are flushed
+      // Force MongoDB to sync all operations across connections
       await mongoose.connection.db.admin().ping();
       
-      // Verify admin was created in database
-      const adminInDb = await User.findOne({ email: adminData.email }).lean();
+      // Wait a bit more to ensure write is committed
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Use the same connection that the API uses
+      const { User: ApiUser } = require('../../dist/models/User');
+      const adminInDb = await ApiUser.findOne({ email: adminData.email }).lean();
+      
       expect(adminInDb).toBeTruthy();
       expect(adminInDb.role).toBe('admin');
     });
