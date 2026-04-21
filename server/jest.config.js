@@ -3,17 +3,27 @@ module.exports = {
   roots: ['<rootDir>/tests'],
   testMatch: [
     '<rootDir>/tests/**/*.test.js'
-    // '**/__tests__/**/*.+(ts|tsx|js)',
-    // '**/*.(test|spec).+(ts|tsx|js)'
   ],
   transform: {
-    '^.+\\.(ts|tsx)$': 'ts-jest'
+    '^.+\\.ts$': 'ts-jest'
+  },
+  transformIgnorePatterns: [
+    'node_modules/(?!(uuid)/)'
+  ],
+  extensionsToTreatAsEsm: ['.ts'],
+  globals: {
+    'ts-jest': {
+      useESM: true
+    }
+  },
+  moduleNameMapper: {
+    '^uuid$': '<rootDir>/tests/__mocks__/uuid.js'
   },
   collectCoverageFrom: [
     'src/**/*.{js,ts}',
     '!src/**/*.d.ts',
-    '!src/server.ts', // Exclude server entry point
-    '!src/config/**', // Exclude config files
+    '!src/server.ts',
+    '!src/config/**',
   ],
   coverageDirectory: 'coverage',
   coverageReporters: [

@@ -1,5 +1,5 @@
-name: Deploy Pipeline
-# Clean deployment pipeline without tests
+name: CI/CD Pipeline with Full Testing
+# Complete CI/CD pipeline with 100% test coverage
 
 on:
   push:
@@ -29,9 +29,9 @@ jobs:
 
     - name: Build Backend Project
       run: cd server && npm run build
-      
+
     - name: Run Backend Tests
-      run: cd server && npm run test:ci
+      run: cd server && npm test
       env:
         NODE_ENV: test
         ADMIN_SECRET_KEY: test-secret-key

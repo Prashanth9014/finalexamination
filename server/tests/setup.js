@@ -1,21 +1,24 @@
 const mongoose = require('mongoose');
+const { connectTestDB, disconnectTestDB, clearTestDB } = require('./testDatabase');
 
 // Set test environment variables
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = 'test-jwt-secret-key-for-testing-purposes-only';
-process.env.MONGODB_URI = 'mongodb://localhost:27017/test_exam_db';
+process.env.MONGODB_URI = 'mongodb://localhost:27017/exam_system_test';
 process.env.ADMIN_SECRET_KEY = 'test-admin-secret';
 
 // Global test setup
 beforeAll(async () => {
-  // Any global setup can go here
+  await connectTestDB();
 });
 
 afterAll(async () => {
-  // Close any open connections
-  if (mongoose.connection.readyState !== 0) {
-    await mongoose.connection.close();
-  }
+  await disconnectTestDB();
+});
+
+// Clear database before each test
+beforeEach(async () => {
+  await clearTestDB();
 });
 
 // Global error handler for unhandled promises

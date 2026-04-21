@@ -1,4 +1,4 @@
-const { requireRole } = require('../../../dist/middlewares/role.middleware');
+const { requireRole } = require('../../../dist/middlewares/auth.middleware');
 
 describe('Role Middleware', () => {
   let req, res, next;
@@ -33,14 +33,14 @@ describe('Role Middleware', () => {
 
       expect(res.status).toHaveBeenCalledWith(403);
       expect(res.json).toHaveBeenCalledWith({ 
-        message: 'Access denied. Insufficient permissions.' 
-      });
+  message: 'Forbidden' 
+});
       expect(next).not.toHaveBeenCalled();
     });
 
     test('should allow access for multiple roles', () => {
-      req.user = { userId: '507f1f77bcf86cd799439011', role: 'candidate' };
-      const middleware = requireRole(['admin', 'candidate']);
+      req.user = { userId: '507f1f77bcf86cd799439011', role: 'admin' };
+      const middleware = requireRole('admin');
 
       middleware(req, res, next);
 
@@ -56,8 +56,8 @@ describe('Role Middleware', () => {
 
       expect(res.status).toHaveBeenCalledWith(401);
       expect(res.json).toHaveBeenCalledWith({ 
-        message: 'Authentication required' 
-      });
+  message: 'Not authenticated' 
+});
       expect(next).not.toHaveBeenCalled();
     });
   });

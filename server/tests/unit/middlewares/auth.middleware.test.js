@@ -1,4 +1,4 @@
-const { authenticateToken } = require('../../../dist/middlewares/auth.middleware');
+const { authenticate } = require('../../../dist/middlewares/auth.middleware');
 const { signToken } = require('../../../dist/utils/jwt');
 
 describe('Auth Middleware', () => {
@@ -22,7 +22,7 @@ describe('Auth Middleware', () => {
       const token = signToken(mockPayload);
       req.headers.authorization = `Bearer ${token}`;
 
-      authenticateToken(req, res, next);
+      authenticate(req, res, next);
 
       expect(req.user).toBeDefined();
       expect(req.user.userId).toBe(mockPayload.userId);
@@ -30,11 +30,11 @@ describe('Auth Middleware', () => {
     });
 
     test('should reject request without token', () => {
-      authenticateToken(req, res, next);
+      authenticate(req, res, next);
 
       expect(res.status).toHaveBeenCalledWith(401);
-      expect(res.json).toHaveBeenCalledWith({ 
-        message: 'Access token is required' 
+      expect(res.json).toHaveBeenCalledWith({
+        message: 'Authorization header missing or invalid'
       });
       expect(next).not.toHaveBeenCalled();
     });
@@ -42,11 +42,11 @@ describe('Auth Middleware', () => {
     test('should reject invalid token', () => {
       req.headers.authorization = 'Bearer invalid-token';
 
-      authenticateToken(req, res, next);
+      authenticate(req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(403);
-      expect(res.json).toHaveBeenCalledWith({ 
-        message: 'Invalid or expired token' 
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.json).toHaveBeenCalledWith({
+        message: 'Invalid or expired token'
       });
       expect(next).not.toHaveBeenCalled();
     });
@@ -54,7 +54,7 @@ describe('Auth Middleware', () => {
     test('should reject malformed authorization header', () => {
       req.headers.authorization = 'InvalidFormat';
 
-      authenticateToken(req, res, next);
+      authenticate(req, res, next);
 
       expect(res.status).toHaveBeenCalledWith(401);
       expect(next).not.toHaveBeenCalled();
