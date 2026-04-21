@@ -1,3 +1,4 @@
+// Integration test setup - WITH DATABASE CONNECTION
 const mongoose = require('mongoose');
 const { connectTestDB, disconnectTestDB, clearTestDB } = require('./testDatabase');
 
@@ -5,9 +6,8 @@ const { connectTestDB, disconnectTestDB, clearTestDB } = require('./testDatabase
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = 'test-jwt-secret-key-for-testing-purposes-only';
 process.env.MONGODB_URI = 'mongodb://localhost:27017/exam_system_test';
-process.env.ADMIN_SECRET_KEY = 'test-admin-secret';
 
-// Global test setup
+// Global test setup for integration tests
 beforeAll(async () => {
   await connectTestDB();
 });
@@ -28,3 +28,5 @@ process.on('unhandledRejection', (reason, promise) => {
 
 // Increase timeout for integration tests
 jest.setTimeout(30000);
+
+console.log('Integration test setup loaded - using real database');

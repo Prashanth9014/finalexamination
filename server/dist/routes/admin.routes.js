@@ -5,12 +5,12 @@ const report_controller_1 = require("../controllers/report.controller");
 const admin_controller_1 = require("../controllers/admin.controller");
 const auth_middleware_1 = require("../middlewares/auth.middleware");
 const router = (0, express_1.Router)();
-// POST /api/admin/register - Register a new admin user (requires secret key)
-router.post('/register', admin_controller_1.registerAdminHandler);
-// POST /api/admins/list - Get all admins (requires secret key)
-router.post('/list', admin_controller_1.getAdminsHandler);
-// DELETE /api/admins/:id - Delete an admin (requires secret key)
-router.delete('/:id', admin_controller_1.deleteAdminHandler);
+// POST /api/admin/register - Register a new admin user (only superadmin can access)
+router.post('/register', auth_middleware_1.authenticate, (0, auth_middleware_1.requireRole)('superadmin'), admin_controller_1.registerAdminHandler);
+// GET /api/admins/list - Get all admins (only superadmin can access)
+router.get('/list', auth_middleware_1.authenticate, (0, auth_middleware_1.requireRole)('superadmin'), admin_controller_1.getAdminsHandler);
+// DELETE /api/admins/:id - Delete an admin (only superadmin can access)
+router.delete('/:id', auth_middleware_1.authenticate, (0, auth_middleware_1.requireRole)('superadmin'), admin_controller_1.deleteAdminHandler);
 // GET /api/admin/report?language=Python - Admin only: get programming language-wise report
 router.get('/report', auth_middleware_1.authenticate, (0, auth_middleware_1.requireAdminOrSuperadmin)(), report_controller_1.getProgrammingLanguageReportHandler);
 // GET /api/admin/department-report?department=CSE - Admin only: get department-wise report (backward compatibility)

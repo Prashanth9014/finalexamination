@@ -1,8 +1,21 @@
 module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/tests'],
-  testMatch: [
-    '<rootDir>/tests/**/*.test.js'
+  projects: [
+    {
+      // Unit tests configuration - NO DATABASE
+      displayName: 'unit',
+      testMatch: ['<rootDir>/tests/unit/**/*.test.js'],
+      setupFilesAfterEnv: ['<rootDir>/tests/unit-setup.js'],
+      testTimeout: 10000,
+    },
+    {
+      // Integration tests configuration - WITH DATABASE
+      displayName: 'integration', 
+      testMatch: ['<rootDir>/tests/integration/**/*.test.js'],
+      setupFilesAfterEnv: ['<rootDir>/tests/integration-setup.js'],
+      testTimeout: 30000,
+    }
   ],
   transform: {
     '^.+\\.ts$': 'ts-jest'
@@ -31,8 +44,6 @@ module.exports = {
     'lcov',
     'html'
   ],
-  setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
-  testTimeout: 10000,
   verbose: true,
   forceExit: true,
   clearMocks: true,

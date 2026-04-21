@@ -44,6 +44,64 @@ const ExamAttempt = () => {
   // Violation tracking system
   const lastViolationTimeRef = useRef(0) // Debounce protection for violations
   const isAlertOpenRef = useRef(false) // Prevent violations while alert is active
+  const violationWindowRef = useRef(null) // Track violation window to prevent double-counting
+
+  // Centralized violation counting function - prevents any double violations
+  const countViolation = (reason, forceCount = false) => {
+    const now = Date.now()
+    
+    // Check if this is a duplicate violation within debounce period
+    if (!forceCount && now - lastViolationTimeRef.current < 1000) {
+      console.log(`Violation debounced: ${reason}`)
+      return getViolationCount()
+    }
+    
+    if (isAlertOpenRef.current) {
+      console.log(`Violation blocked during alert: ${reason}`)
+      return getViolationCount()
+    }
+
+    // Universal double-violation prevention
+    // If any violation occurred within the last 1000ms, don't count another one
+    if (violationWindowRef.current) {
+      const timeDiff = now - violationWindowRef.current.timestamp
+      
+      // If any violation event occurs within 1000ms of another, combine them
+      if (timeDiff < 1000) {
+        const combinedReason = `${violationWindowRef.current.reason} + ${reason} (Combined action)`
+        console.log(`Combined violation detected: ${combinedReason}`)
+        
+        // Update the reason but don't increment count
+        violationWindowRef.current.reason = combinedReason
+        return getViolationCount()
+      } else {
+        // Previous violation window expired, clear it
+        violationWindowRef.current = null
+      }
+    }
+
+    // Count the violation
+    lastViolationTimeRef.current = now
+    const currentCount = getViolationCount()
+    const newCount = currentCount + 1
+    localStorage.setItem(`violations_${examId}`, newCount.toString())
+    console.log(`Violation counted: ${reason}. Count: ${newCount}/3`)
+    
+    // Set violation window to prevent double-counting
+    violationWindowRef.current = {
+      reason: reason,
+      timestamp: now
+    }
+    
+    // Clear violation window after 1000ms
+    setTimeout(() => {
+      if (violationWindowRef.current && violationWindowRef.current.timestamp === now) {
+        violationWindowRef.current = null
+      }
+    }, 1000)
+    
+    return newCount
+  }
 
   // Refs that mirror state so event handlers always see current values
   // without needing to re-register listeners on every render
@@ -84,25 +142,8 @@ const ExamAttempt = () => {
   }
 
   const incrementViolation = (reason) => {
-    // Legacy helper kept for handleSubmitDueToViolation compatibility.
-    // Direct violation counting is now done inline in each handler
-    // to avoid race conditions. This function is only called for
-    // auto-submit-due-to-violation checks.
-    const now = Date.now()
-    if (now - lastViolationTimeRef.current < 1000) {
-      console.log(`Violation debounced: ${reason}`)
-      return getViolationCount()
-    }
-    if (isAlertOpenRef.current) {
-      console.log(`Violation blocked during alert: ${reason}`)
-      return getViolationCount()
-    }
-    lastViolationTimeRef.current = now
-    const currentCount = getViolationCount()
-    const newCount = currentCount + 1
-    localStorage.setItem(`violations_${examId}`, newCount.toString())
-    console.log(`Violation detected: ${reason}. Count: ${newCount}/3`)
-    return newCount
+    // Legacy helper for handleSubmitDueToViolation compatibility
+    return countViolation(reason, true) // Force count for auto-submit scenarios
   }
 
   const handleSubmitDueToViolation = async () => {
@@ -281,15 +322,9 @@ const ExamAttempt = () => {
 
       isUnloadingRef.current = true
 
-      // Count exactly ONE violation — debounced to prevent double-fire
-      const now = Date.now()
-      if (now - lastViolationTimeRef.current >= 500) {
-        lastViolationTimeRef.current = now
-        const currentCount = getViolationCount()
-        const newCount = currentCount + 1
-        localStorage.setItem(`violations_${examId}`, newCount.toString())
-        console.log(`Reload violation counted. Total: ${newCount}/3`)
-      }
+      // Count exactly ONE violation using centralized function
+      const newCount = countViolation('Page reload', true) // Force count for reload
+      console.log(`Reload violation counted. Total: ${newCount}/3`)
 
       // Flag persists across reload — mount useEffect reads it to show popup
       sessionStorage.setItem(`reloadViolation_${examId}`, 'true')
@@ -364,17 +399,14 @@ const ExamAttempt = () => {
 
       // Normal tab switch / window minimize
       if (document.hidden && !isAlertOpenRef.current) {
-        const now = Date.now()
-        if (now - lastViolationTimeRef.current >= 1000) {
-          lastViolationTimeRef.current = now
-          const currentCount = getViolationCount()
-          const newCount = currentCount + 1
-          localStorage.setItem(`violations_${examId}`, newCount.toString())
-          console.log(`Tab switch violation. Count: ${newCount}/3`)
-
+        const newCount = countViolation('Tab switch')
+        
+        // Show alert immediately after counting
+        const currentCount = getViolationCount()
+        if (currentCount > 0 && !isAlertOpenRef.current) {
           isAlertOpenRef.current = true
-          if (newCount <= 3) {
-            alert(`Warning: You switched tabs. Violations: ${newCount}/3`)
+          if (currentCount <= 3) {
+            alert(`Warning: You switched tabs. Violations: ${currentCount}/3`)
           } else {
             alert('Exam terminated due to malpractice')
             handleSubmitDueToViolation()
@@ -407,17 +439,14 @@ const ExamAttempt = () => {
 
         // Normal fullscreen exit (ESC, window minimize, etc.)
         if (!document.hidden && !isAlertOpenRef.current) {
-          const now = Date.now()
-          if (now - lastViolationTimeRef.current >= 1000) {
-            lastViolationTimeRef.current = now
-            const currentCount = getViolationCount()
-            const newCount = currentCount + 1
-            localStorage.setItem(`violations_${examId}`, newCount.toString())
-            console.log(`Fullscreen exit violation. Count: ${newCount}/3`)
-
+          const newCount = countViolation('Fullscreen exit')
+          
+          // Show alert immediately after counting
+          const currentCount = getViolationCount()
+          if (currentCount > 0 && !isAlertOpenRef.current) {
             isAlertOpenRef.current = true
-            if (newCount <= 3) {
-              alert(`Warning: You exited fullscreen. Violations: ${newCount}/3`)
+            if (currentCount <= 3) {
+              alert(`Warning: You exited fullscreen. Violations: ${currentCount}/3`)
             } else {
               alert('Exam terminated due to malpractice')
               handleSubmitDueToViolation()

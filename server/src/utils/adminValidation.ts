@@ -1,29 +1,9 @@
 /**
- * Shared admin secret key validation utility
- * Used by all admin operations to ensure consistent validation
+ * Admin validation utilities
+ * Note: Secret key validation has been removed as superadmin authentication
+ * is now handled through OTP verification instead of secret keys
  */
 
-/**
- * Validate admin secret key
- * Trims whitespace and compares with environment variable
- * @param secretKey - The secret key to validate
- * @returns true if valid, false otherwise
- */
-export function validateAdminSecretKey(secretKey: string): boolean {
-  const requestKey = secretKey?.trim();
-  const envKey = process.env.ADMIN_SECRET_KEY?.trim();
-  
-  console.log('[DEBUG] validateAdminSecretKey() called:');
-  console.log('  Input secretKey:', JSON.stringify(secretKey));
-  console.log('  Trimmed requestKey:', JSON.stringify(requestKey));
-  console.log('  process.env.ADMIN_SECRET_KEY:', JSON.stringify(process.env.ADMIN_SECRET_KEY));
-  console.log('  Trimmed envKey:', JSON.stringify(envKey));
-  console.log('  Comparison result:', requestKey === envKey);
-  console.log('  requestKey type:', typeof requestKey, 'length:', requestKey?.length);
-  console.log('  envKey type:', typeof envKey, 'length:', envKey?.length);
-  
-  const result = requestKey === envKey;
-  console.log('  Final result:', result);
-  
-  return result;
-}
+// This file is kept for potential future admin validation utilities
+// Currently no validation functions are needed as authentication is handled
+// through proper JWT tokens and role-based middleware

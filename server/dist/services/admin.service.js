@@ -7,10 +7,10 @@ const jwt_1 = require("../utils/jwt");
 /**
  * Register a new admin user
  * Admin registration endpoint - always creates user with role = 'admin'
- * Requires valid secret key for security
+ * Only superadmin can create admins (authentication handled by middleware)
  */
 async function registerAdmin(input) {
-    const { name, email, password, secretKey } = input;
+    const { name, email, password } = input;
     // Check if user already exists
     const existing = await User_1.User.findOne({ email: email.toLowerCase() }).exec();
     if (existing) {

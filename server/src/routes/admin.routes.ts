@@ -5,14 +5,14 @@ import { authenticate, requireRole, requireAdminOrSuperadmin } from '../middlewa
 
 const router = Router();
 
-// POST /api/admin/register - Register a new admin user (requires secret key)
-router.post('/register', registerAdminHandler);
+// POST /api/admin/register - Register a new admin user (only superadmin can access)
+router.post('/register', authenticate, requireRole('superadmin'), registerAdminHandler);
 
-// POST /api/admins/list - Get all admins (requires secret key)
-router.post('/list', getAdminsHandler);
+// GET /api/admins/list - Get all admins (only superadmin can access)
+router.get('/list', authenticate, requireRole('superadmin'), getAdminsHandler);
 
-// DELETE /api/admins/:id - Delete an admin (requires secret key)
-router.delete('/:id', deleteAdminHandler);
+// DELETE /api/admins/:id - Delete an admin (only superadmin can access)
+router.delete('/:id', authenticate, requireRole('superadmin'), deleteAdminHandler);
 
 // GET /api/admin/report?language=Python - Admin only: get programming language-wise report
 router.get(

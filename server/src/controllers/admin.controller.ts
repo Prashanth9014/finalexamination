@@ -1,12 +1,11 @@
 import type { Request, Response, NextFunction } from 'express';
 import { registerAdmin, type AdminRegisterInput } from '../services/admin.service';
-import { validateAdminSecretKey } from '../utils/adminValidation';
 
 /**
  * Validate admin registration request body
  */
 function validateAdminRegisterBody(body: any): AdminRegisterInput {
-  const { name, email, password, secretKey } = body;
+  const { name, email, password } = body;
 
   if (!name || typeof name !== 'string') {
     throw new Error('Name is required');
@@ -17,7 +16,7 @@ function validateAdminRegisterBody(body: any): AdminRegisterInput {
   if (!password || typeof password !== 'string' || password.length < 6) {
     throw new Error('Password must be at least 6 characters long');
   }
-  return { name, email, password, secretKey: '' };
+  return { name, email, password };
 }
 
 /**
@@ -29,23 +28,15 @@ function isValidationOrAuthError(message: string): boolean {
     'Email is required',
     'Password is required',
     'Password must be at least 6 characters long',
-    'Admin secret key is required',
   ];
   return knownErrors.includes(message) || message.includes('exists');
-}
-
-/**
- * Check if error is an invalid secret key error
- */
-function isInvalidSecretKeyError(message: string): boolean {
-  return message === 'Invalid admin secret key';
 }
 
 /**
  * Admin registration controller
  * POST /api/admin/register
  * Creates a new admin user with role = 'admin'
- * Requires valid secret key
+ * Only accessible by superadmin (authentication handled by middleware)
  */
 export async function registerAdminHandler(
   req: Request,
@@ -57,10 +48,6 @@ export async function registerAdminHandler(
     const result = await registerAdmin(input);
     res.status(201).json(result);
   } catch (error) {
-    if (error instanceof Error && isInvalidSecretKeyError(error.message)) {
-      res.status(403).json({ message: error.message });
-      return;
-    }
     if (error instanceof Error && isValidationOrAuthError(error.message)) {
       res.status(400).json({ message: error.message });
       return;
@@ -71,8 +58,8 @@ export async function registerAdminHandler(
 
 /**
  * Get all admins
- * POST /api/admins/list
- * Requires valid secret key in request body
+ * GET /api/admins/list
+ * Only accessible by superadmin (authentication handled by middleware)
  */
 export async function getAdminsHandler(
   req: Request,
@@ -80,18 +67,10 @@ export async function getAdminsHandler(
   next: NextFunction,
 ) {
   try {
-    const { secretKey } = req.body;
-
     console.log('\n========== [DEBUG] getAdminsHandler START ==========');
     console.log('Request received at /api/admins/list');
-    console.log('Full request body:', JSON.stringify(req.body));
-    console.log('Extracted secretKey:', JSON.stringify(secretKey));
-    console.log('secretKey type:', typeof secretKey);
-    console.log('secretKey length:', secretKey?.length);
+    console.log('User from token:', (req as any).user);
 
-    console.log('Secret key validation removed, fetching admins...');
-
-    console.log('Secret key validation passed, fetching admins...');
     const { User } = await import('../models/User');
     const admins = await User.find({ role: 'admin' }).select('-password');
 
@@ -108,7 +87,7 @@ export async function getAdminsHandler(
 /**
  * Delete an admin
  * DELETE /api/admins/:id
- * Requires valid secret key in request body
+ * Only accessible by superadmin (authentication handled by middleware)
  */
 export async function deleteAdminHandler(
   req: Request,
@@ -117,9 +96,6 @@ export async function deleteAdminHandler(
 ) {
   try {
     const { id } = req.params;
-    const { secretKey } = req.body;
-
-
 
     const { User } = await import('../models/User');
     const admin = await User.findById(id);

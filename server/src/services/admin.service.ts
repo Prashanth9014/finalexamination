@@ -1,13 +1,11 @@
 import { User, type IUser } from '../models/User';
 import { hashPassword } from '../utils/password';
 import { signToken } from '../utils/jwt';
-import { validateAdminSecretKey } from '../utils/adminValidation';
 
 export interface AdminRegisterInput {
   name: string;
   email: string;
   password: string;
-  secretKey: string;
 }
 
 export interface AdminRegisterResponse {
@@ -24,10 +22,10 @@ export interface AdminRegisterResponse {
 /**
  * Register a new admin user
  * Admin registration endpoint - always creates user with role = 'admin'
- * Requires valid secret key for security
+ * Only superadmin can create admins (authentication handled by middleware)
  */
 export async function registerAdmin(input: AdminRegisterInput): Promise<AdminRegisterResponse> {
-  const { name, email, password, secretKey } = input;
+  const { name, email, password } = input;
 
 
 

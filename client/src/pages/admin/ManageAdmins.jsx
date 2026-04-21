@@ -25,12 +25,13 @@ const ManageAdmins = () => {
   const fetchAdmins = async () => {
     try {
       setLoading(true)
+      const token = localStorage.getItem('token')
       const response = await fetch('/api/admins/list', {
-        method: 'POST',
+        method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({})
+          'Authorization': `Bearer ${token}`
+        }
       })
 
       if (!response.ok) {
@@ -54,10 +55,12 @@ const ManageAdmins = () => {
     setCreateLoading(true)
 
     try {
+      const token = localStorage.getItem('token')
       const response = await fetch('/api/admin/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           name: createFormData.name,
@@ -91,12 +94,13 @@ const ManageAdmins = () => {
     }
 
     try {
+      const token = localStorage.getItem('token')
       const response = await fetch(`/api/admins/${adminId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({})
+          'Authorization': `Bearer ${token}`
+        }
       })
 
       if (!response.ok) {
