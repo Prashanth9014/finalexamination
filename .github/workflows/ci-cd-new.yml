@@ -17,7 +17,7 @@ jobs:
         ports:
           - 27017:27017
         options: >-
-          --health-cmd "mongosh --eval 'db.runCommand({ping: 1})'"
+          --health-cmd "mongo --eval 'db.runCommand({ping: 1})'"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -47,34 +47,34 @@ jobs:
         echo "Waiting for MongoDB to be ready..."
         timeout 60s bash -c 'until nc -z localhost 27017; do sleep 1; done'
         echo "MongoDB port is open, waiting for service to be fully ready..."
-        # Use Node.js to test MongoDB connection instead of mongosh
-        timeout 60s bash -c 'until node -e "
-          const { MongoClient } = require(\"mongodb\");
-          const client = new MongoClient(\"mongodb://localhost:27017\");
-          client.connect().then(() => {
-            console.log(\"MongoDB connection successful\");
-            client.close();
-            process.exit(0);
-          }).catch(() => {
-            process.exit(1);
-          });
-        "; do sleep 2; done'
-        echo "MongoDB is fully ready!"
+        sleep 10
+        echo "MongoDB is ready!"
 
-    - name: Initialize Test Database
+    - name: Test MongoDB Connection
       run: |
-        echo "Initializing test database..."
-        node -e "
-          const { MongoClient } = require('mongodb');
-          const client = new MongoClient('mongodb://localhost:27017/exam_system_test');
-          client.connect().then(async () => {
-            const db = client.db('exam_system_test');
-            await db.admin().ping();
-            console.log('Test database initialized successfully');
-            client.close();
-          }).catch(console.error);
+        echo "Testing MongoDB connection from server directory..."
+        cd server
+        timeout 30s node -e "
+          const mongoose = require('mongoose');
+          console.log('Attempting to connect to MongoDB...');
+          mongoose.connect('mongodb://localhost:27017/exam_system_test', {
+            serverSelectionTimeoutMS: 10000,
+            connectTimeoutMS: 10000
+          })
+            .then(() => {
+              console.log('✅ MongoDB connection successful');
+              return mongoose.connection.close();
+            })
+            .then(() => {
+              console.log('✅ MongoDB connection closed successfully');
+              process.exit(0);
+            })
+            .catch((err) => {
+              console.error('❌ MongoDB connection failed:', err.message);
+              process.exit(1);
+            });
         "
-        echo "Test database initialization complete!"
+        echo "MongoDB connection test completed!"
 
     - name: Run Unit Tests (No Database)
       run: cd server && npm run test:unit
