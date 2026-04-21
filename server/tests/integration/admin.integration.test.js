@@ -236,11 +236,16 @@ describe('Admin Integration Tests', () => {
     });
 
     test('should not allow deleting non-admin users', async () => {
-      // Try to delete a candidate
-      const candidate = await User.findOne({ role: 'candidate' });
+      // Create a candidate specifically for this test
+      const candidateToTest = await User.create({
+        name: 'Test Candidate for Deletion',
+        email: `test-candidate-delete-${Date.now()}@example.com`,
+        password: await bcrypt.hash('password123', 10),
+        role: 'candidate'
+      });
 
       const response = await request(app)
-        .delete(`/api/admins/${candidate._id}`)
+        .delete(`/api/admins/${candidateToTest._id}`)
         .set('Authorization', `Bearer ${superadminToken}`)
         .expect(400);
 
