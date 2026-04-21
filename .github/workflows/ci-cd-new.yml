@@ -46,7 +46,15 @@ jobs:
       run: |
         echo "Waiting for MongoDB to be ready..."
         timeout 60s bash -c 'until nc -z localhost 27017; do sleep 1; done'
-        echo "MongoDB is ready!"
+        echo "MongoDB port is open, waiting for service to be fully ready..."
+        timeout 60s bash -c 'until mongosh --eval "db.runCommand({ping: 1})" --quiet; do sleep 2; done'
+        echo "MongoDB is fully ready!"
+
+    - name: Initialize Test Database
+      run: |
+        echo "Initializing test database..."
+        mongosh mongodb://localhost:27017/exam_system_test --eval "db.runCommand({ping: 1})"
+        echo "Test database initialized!"
 
     - name: Run Unit Tests (No Database)
       run: cd server && npm run test:unit
@@ -55,14 +63,14 @@ jobs:
         JWT_SECRET: test-secret-key-for-ci-pipeline-minimum-32-chars
 
     - name: Run Integration Tests (With Database)
-      run: cd server && npm run test:integration
+      run: cd server && timeout 300s npm run test:integration
       env:
         NODE_ENV: test
         MONGODB_URI: mongodb://localhost:27017/exam_system_test
         JWT_SECRET: test-secret-key-for-ci-pipeline-minimum-32-chars
 
     - name: Run All Tests Together (Final Verification)
-      run: cd server && npm test
+      run: cd server && timeout 300s npm test
       env:
         NODE_ENV: test
         MONGODB_URI: mongodb://localhost:27017/exam_system_test
