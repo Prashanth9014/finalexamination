@@ -48,7 +48,7 @@ describe('Admin Integration Tests', () => {
     candidateToken = signToken({ userId: candidate.id, role: 'candidate' });
   });
 
-  describe('POST /api/admin/register', () => {
+  describe('POST /api/admins/register', () => {
     test('should allow superadmin to create new admin', async () => {
       const adminData = {
         name: 'New Admin',
@@ -58,7 +58,7 @@ describe('Admin Integration Tests', () => {
 
       console.log('Making API call to create admin...');
       const response = await request(app)
-        .post('/api/admin/register')
+        .post('/api/admins/register')
         .set('Authorization', `Bearer ${superadminToken}`)
         .send(adminData);
 
@@ -86,7 +86,7 @@ describe('Admin Integration Tests', () => {
       };
 
       const response = await request(app)
-        .post('/api/admin/register')
+        .post('/api/admins/register')
         .set('Authorization', `Bearer ${adminToken}`)
         .send(adminData)
         .expect(403);
@@ -102,7 +102,7 @@ describe('Admin Integration Tests', () => {
       };
 
       const response = await request(app)
-        .post('/api/admin/register')
+        .post('/api/admins/register')
         .set('Authorization', `Bearer ${candidateToken}`)
         .send(adminData)
         .expect(403);
@@ -118,7 +118,7 @@ describe('Admin Integration Tests', () => {
       };
 
       const response = await request(app)
-        .post('/api/admin/register')
+        .post('/api/admins/register')
         .send(adminData)
         .expect(401);
 
@@ -127,7 +127,7 @@ describe('Admin Integration Tests', () => {
 
     test('should validate required fields', async () => {
       const response = await request(app)
-        .post('/api/admin/register')
+        .post('/api/admins/register')
         .set('Authorization', `Bearer ${superadminToken}`)
         .send({
           name: 'New Admin'

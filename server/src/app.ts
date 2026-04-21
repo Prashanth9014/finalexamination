@@ -87,7 +87,6 @@ export function createApp(corsOrigin: string): Application {
   }
 
   app.use('/api/auth', authRoutes);
-  app.use('/api/admin', adminRoutes);
   app.use('/api/admins', adminRoutes);
   app.use('/api/exams', examRoutes);
   app.use('/api/submissions', submissionRoutes);
@@ -100,7 +99,7 @@ export function createApp(corsOrigin: string): Application {
       server: 'online-recruit-system',
       timestamp: new Date().toISOString(),
       network: {
-        host: '192.168.29.108',
+        host: '192.168.29.104',
         ports: {
           frontend: 3003,
           backend: 5050

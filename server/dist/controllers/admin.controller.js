@@ -67,7 +67,7 @@ function isValidationOrAuthError(message) {
 }
 /**
  * Admin registration controller
- * POST /api/admin/register
+ * POST /api/admins/register
  * Creates a new admin user with role = 'admin'
  * Only accessible by superadmin (authentication handled by middleware)
  */

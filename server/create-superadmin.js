@@ -16,7 +16,7 @@ const User = mongoose.model('User', UserSchema);
 async function createSuperadmin() {
   try {
     // Connect to MongoDB
-    await mongoose.connect(process.env.MONGO_URI);
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/online_recruit_system');
     console.log('Connected to MongoDB');
 
     // Check if superadmin already exists

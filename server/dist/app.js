@@ -80,7 +80,6 @@ function createApp(corsOrigin) {
         app.use((0, morgan_1.default)('dev'));
     }
     app.use('/api/auth', auth_routes_1.default);
-    app.use('/api/admin', admin_routes_1.default);
     app.use('/api/admins', admin_routes_1.default);
     app.use('/api/exams', exam_routes_1.default);
     app.use('/api/submissions', submission_routes_1.default);
@@ -92,7 +91,7 @@ function createApp(corsOrigin) {
             server: 'online-recruit-system',
             timestamp: new Date().toISOString(),
             network: {
-                host: '192.168.29.108',
+                host: '192.168.29.104',
                 ports: {
                     frontend: 3003,
                     backend: 5050

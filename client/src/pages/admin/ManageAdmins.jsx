@@ -25,7 +25,7 @@ const ManageAdmins = () => {
   const fetchAdmins = async () => {
     try {
       setLoading(true)
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       const response = await fetch('/api/admins/list', {
         method: 'GET',
         headers: {
@@ -55,8 +55,8 @@ const ManageAdmins = () => {
     setCreateLoading(true)
 
     try {
-      const token = localStorage.getItem('token')
-      const response = await fetch('/api/admin/register', {
+      const token = sessionStorage.getItem('token')
+      const response = await fetch('/api/admins/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -94,7 +94,7 @@ const ManageAdmins = () => {
     }
 
     try {
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       const response = await fetch(`/api/admins/${adminId}`, {
         method: 'DELETE',
         headers: {

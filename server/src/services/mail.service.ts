@@ -167,7 +167,7 @@ export async function sendResetPasswordEmail(input: SendResetEmailInput): Promis
 
     // Build reset link
     const resetLink = `${env.FRONTEND_URL}/reset-password/${resetToken}`;
-    console.log(`[MAIL] Reset link generated: ${resetLink.substring(0, 50)}...`);
+    console.log(`[MAIL] Reset link generated: ${resetLink}`);
 
     const mailOptions = {
       from: env.EMAIL_USER,
@@ -207,22 +207,6 @@ export async function sendResetPasswordEmail(input: SendResetEmailInput): Promis
       console.error(`[MAIL] Error code: ${(error as any).code}`);
       console.error(`[MAIL] Error command: ${(error as any).command}`);
       console.error(`[MAIL] Error response: ${(error as any).response}`);
-      
-      // Check if it's a Gmail authentication error
-      if ((error as any).code === 'EAUTH') {
-        console.error('[MAIL] ');
-        console.error('[MAIL] ⚠️  GMAIL AUTHENTICATION FAILED');
-        console.error('[MAIL] The EMAIL_PASSWORD in .env is incorrect or invalid.');
-        console.error('[MAIL] ');
-        console.error('[MAIL] To fix this:');
-        console.error('[MAIL] 1. Go to https://myaccount.google.com/apppasswords');
-        console.error('[MAIL] 2. Make sure 2-Factor Authentication is enabled');
-        console.error('[MAIL] 3. Select "Mail" and "Windows Computer"');
-        console.error('[MAIL] 4. Copy the 16-character password (with spaces)');
-        console.error('[MAIL] 5. Update EMAIL_PASSWORD in server/.env');
-        console.error('[MAIL] 6. Restart the backend with: npm run dev');
-        console.error('[MAIL] ');
-      }
     }
     
     console.log('[MAIL] ==========================================');

@@ -66,10 +66,14 @@ const ExamAttempt = () => {
     if (violationWindowRef.current) {
       const timeDiff = now - violationWindowRef.current.timestamp
       
-      // If any violation event occurs within 1000ms of another, combine them
-      if (timeDiff < 1000) {
+      // Extended protection window for dialog-related events (3 seconds)
+      const protectionWindow = violationWindowRef.current.reason.includes('Tab switch') || 
+                              violationWindowRef.current.reason.includes('fullscreen') ? 3000 : 1000
+      
+      // If any violation event occurs within protection window, combine them
+      if (timeDiff < protectionWindow) {
         const combinedReason = `${violationWindowRef.current.reason} + ${reason} (Combined action)`
-        console.log(`Combined violation detected: ${combinedReason}`)
+        console.log(`Combined violation detected: ${combinedReason} (Protected for ${protectionWindow}ms)`)
         
         // Update the reason but don't increment count
         violationWindowRef.current.reason = combinedReason
@@ -93,12 +97,13 @@ const ExamAttempt = () => {
       timestamp: now
     }
     
-    // Clear violation window after 1000ms
+    // Clear violation window after appropriate time (extended for dialog-related events)
+    const clearTimeout = reason.includes('Tab switch') || reason.includes('fullscreen') ? 3000 : 1000
     setTimeout(() => {
       if (violationWindowRef.current && violationWindowRef.current.timestamp === now) {
         violationWindowRef.current = null
       }
-    }, 1000)
+    }, clearTimeout)
     
     return newCount
   }
@@ -405,13 +410,18 @@ const ExamAttempt = () => {
         const currentCount = getViolationCount()
         if (currentCount > 0 && !isAlertOpenRef.current) {
           isAlertOpenRef.current = true
+          
+          // Set a longer protection window to prevent violations during and after alert
+          setTimeout(() => {
+            isAlertOpenRef.current = false
+          }, 2000) // 2 seconds protection after alert is dismissed
+          
           if (currentCount <= 3) {
             alert(`Warning: You switched tabs. Violations: ${currentCount}/3`)
           } else {
             alert('Exam terminated due to malpractice')
             handleSubmitDueToViolation()
           }
-          isAlertOpenRef.current = false
         }
       }
     }
@@ -445,13 +455,18 @@ const ExamAttempt = () => {
           const currentCount = getViolationCount()
           if (currentCount > 0 && !isAlertOpenRef.current) {
             isAlertOpenRef.current = true
+            
+            // Set a longer protection window to prevent violations during and after alert
+            setTimeout(() => {
+              isAlertOpenRef.current = false
+            }, 2000) // 2 seconds protection after alert is dismissed
+            
             if (currentCount <= 3) {
               alert(`Warning: You exited fullscreen. Violations: ${currentCount}/3`)
             } else {
               alert('Exam terminated due to malpractice')
               handleSubmitDueToViolation()
             }
-            isAlertOpenRef.current = false
           }
         }
 
@@ -477,8 +492,52 @@ const ExamAttempt = () => {
       }
     }
 
+    // Handle mouse clicks (can detect clicks on browser dialog buttons)
+    const handleMouseClick = (e) => {
+      // If an alert is active and user clicks, extend the protection window
+      if (isAlertOpenRef.current) {
+        console.log('Mouse click detected during alert - extending protection window')
+        // Extend protection for another 2 seconds after click
+        setTimeout(() => {
+          if (isAlertOpenRef.current) {
+            isAlertOpenRef.current = false
+          }
+        }, 2000)
+      }
+    }
+
+    // Handle window focus events (can be triggered by clicking OK on browser dialogs)
+    const handleWindowFocus = () => {
+      // If an alert was recently shown, don't count focus events as violations
+      if (isAlertOpenRef.current) {
+        console.log('Window focus event blocked - alert is active')
+        return
+      }
+      
+      // Additional protection: if we're within 3 seconds of a violation, ignore focus events
+      if (violationWindowRef.current) {
+        const timeDiff = Date.now() - violationWindowRef.current.timestamp
+        if (timeDiff < 3000) {
+          console.log('Window focus event blocked - within violation protection window')
+          return
+        }
+      }
+    }
+
+    // Handle window blur events (can be triggered by browser dialogs)
+    const handleWindowBlur = () => {
+      // If an alert is active, don't count blur events as violations
+      if (isAlertOpenRef.current) {
+        console.log('Window blur event blocked - alert is active')
+        return
+      }
+    }
+
     document.addEventListener('keydown', handleKeyDown)
+    document.addEventListener('click', handleMouseClick, true) // Use capture phase to catch all clicks
     window.addEventListener('pageshow', handlePageShow)
+    window.addEventListener('focus', handleWindowFocus)
+    window.addEventListener('blur', handleWindowBlur)
     document.addEventListener('fullscreenchange', handleFullscreenChange)
     document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
     document.addEventListener('mozfullscreenchange', handleFullscreenChange)
@@ -488,7 +547,10 @@ const ExamAttempt = () => {
     return () => {
       if (fullscreenCheckTimeout) clearTimeout(fullscreenCheckTimeout)
       document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('click', handleMouseClick, true)
       window.removeEventListener('pageshow', handlePageShow)
+      window.removeEventListener('focus', handleWindowFocus)
+      window.removeEventListener('blur', handleWindowBlur)
       document.removeEventListener('fullscreenchange', handleFullscreenChange)
       document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
       document.removeEventListener('mozfullscreenchange', handleFullscreenChange)

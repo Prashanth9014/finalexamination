@@ -48,9 +48,9 @@ async function forgotPasswordHandler(req, res, next) {
         // Handle email sending errors
         if (error instanceof Error && error.message.includes('Failed to send reset password email')) {
             console.error('[FORGOT-PASSWORD] Email sending failed:', error.message);
-            // Still return success to prevent email enumeration, but log the error
-            res.status(200).json({
-                message: 'If the email exists in our system, a password reset link will be sent.',
+            // Return actual error for debugging
+            res.status(500).json({
+                message: 'Failed to send reset email. Please try again.',
             });
             return;
         }
