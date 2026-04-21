@@ -47,14 +47,34 @@ jobs:
         echo "Waiting for MongoDB to be ready..."
         timeout 60s bash -c 'until nc -z localhost 27017; do sleep 1; done'
         echo "MongoDB port is open, waiting for service to be fully ready..."
-        timeout 60s bash -c 'until mongosh --eval "db.runCommand({ping: 1})" --quiet; do sleep 2; done'
+        # Use Node.js to test MongoDB connection instead of mongosh
+        timeout 60s bash -c 'until node -e "
+          const { MongoClient } = require(\"mongodb\");
+          const client = new MongoClient(\"mongodb://localhost:27017\");
+          client.connect().then(() => {
+            console.log(\"MongoDB connection successful\");
+            client.close();
+            process.exit(0);
+          }).catch(() => {
+            process.exit(1);
+          });
+        "; do sleep 2; done'
         echo "MongoDB is fully ready!"
 
     - name: Initialize Test Database
       run: |
         echo "Initializing test database..."
-        mongosh mongodb://localhost:27017/exam_system_test --eval "db.runCommand({ping: 1})"
-        echo "Test database initialized!"
+        node -e "
+          const { MongoClient } = require('mongodb');
+          const client = new MongoClient('mongodb://localhost:27017/exam_system_test');
+          client.connect().then(async () => {
+            const db = client.db('exam_system_test');
+            await db.admin().ping();
+            console.log('Test database initialized successfully');
+            client.close();
+          }).catch(console.error);
+        "
+        echo "Test database initialization complete!"
 
     - name: Run Unit Tests (No Database)
       run: cd server && npm run test:unit
