@@ -1,7 +1,7 @@
 const request = require('supertest');
 const mongoose = require('mongoose');
 const app = require('../../dist/app').default;
-const { User } = require('../../dist/models/User');
+const { User } = require('../../dist/models/User'); // Use compiled model (same as API)
 const bcrypt = require('bcrypt');
 
 describe('Admin Integration Tests', () => {
@@ -10,7 +10,7 @@ describe('Admin Integration Tests', () => {
   let candidateToken;
 
   beforeEach(async () => {
-    // Create superadmin user with unique email
+    // Create superadmin user with unique email using the SAME User model as API
     const superadminEmail = `superadmin-${Date.now()}@example.com`;
     const superadminPassword = await bcrypt.hash('superadmin123', 10);
     const superadmin = await User.create({
@@ -20,7 +20,7 @@ describe('Admin Integration Tests', () => {
       role: 'superadmin'
     });
 
-    // Create admin user with unique email
+    // Create admin user with unique email using the SAME User model as API
     const adminEmail = `admin-${Date.now()}@example.com`;
     const adminPassword = await bcrypt.hash('admin123', 10);
     const admin = await User.create({
@@ -30,7 +30,7 @@ describe('Admin Integration Tests', () => {
       role: 'admin'
     });
 
-    // Create candidate user with unique email
+    // Create candidate user with unique email using the SAME User model as API
     const candidateEmail = `candidate-${Date.now()}@example.com`;
     const candidatePassword = await bcrypt.hash('candidate123', 10);
     const candidate = await User.create({
@@ -41,7 +41,7 @@ describe('Admin Integration Tests', () => {
     });
 
     // Get tokens by logging in (for superadmin, we'll mock the OTP verification)
-    // For testing purposes, we'll create tokens directly
+    // For testing purposes, we'll create tokens directly using the SAME jwt util as API
     const { signToken } = require('../../dist/utils/jwt');
     superadminToken = signToken({ userId: superadmin.id, role: 'superadmin' });
     adminToken = signToken({ userId: admin.id, role: 'admin' });
@@ -56,26 +56,26 @@ describe('Admin Integration Tests', () => {
         password: 'password123'
       };
 
+      console.log('Making API call to create admin...');
       const response = await request(app)
         .post('/api/admin/register')
         .set('Authorization', `Bearer ${superadminToken}`)
         .send(adminData)
         .expect(201);
 
+      console.log('API call successful, response:', response.body);
       expect(response.body.user).toBeDefined();
       expect(response.body.user.email).toBe(adminData.email);
       expect(response.body.user.role).toBe('admin');
       expect(response.body.token).toBeDefined();
 
-      // Force MongoDB to sync all operations across connections
-      await mongoose.connection.db.admin().ping();
+      // Wait for database write to complete and sync across connections
+      await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Wait a bit more to ensure write is committed
-      await new Promise(resolve => setTimeout(resolve, 200));
-      
-      // Use the same connection that the API uses
-      const { User: ApiUser } = require('../../dist/models/User');
-      const adminInDb = await ApiUser.findOne({ email: adminData.email }).lean();
+      // Verify admin was created in database using the SAME User model as API
+      console.log('Checking database for admin...');
+      const adminInDb = await User.findOne({ email: adminData.email }).lean();
+      console.log('Admin found in DB:', adminInDb ? 'YES' : 'NO');
       
       expect(adminInDb).toBeTruthy();
       expect(adminInDb.role).toBe('admin');
