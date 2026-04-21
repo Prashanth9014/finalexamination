@@ -1,4 +1,5 @@
 const request = require('supertest');
+const mongoose = require('mongoose');
 const app = require('../../dist/app').default;
 const { User } = require('../../dist/models/User');
 const bcrypt = require('bcrypt');
@@ -66,8 +67,11 @@ describe('Admin Integration Tests', () => {
       expect(response.body.user.role).toBe('admin');
       expect(response.body.token).toBeDefined();
 
+      // Ensure all database operations are flushed
+      await mongoose.connection.db.admin().ping();
+      
       // Verify admin was created in database
-      const adminInDb = await User.findOne({ email: adminData.email });
+      const adminInDb = await User.findOne({ email: adminData.email }).lean();
       expect(adminInDb).toBeTruthy();
       expect(adminInDb.role).toBe('admin');
     });
