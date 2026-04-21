@@ -16,11 +16,6 @@ jobs:
         image: mongo:7.0
         ports:
           - 27017:27017
-        options: >-
-          --health-cmd "mongo --eval 'db.runCommand({ping: 1})'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
 
     steps:
     - name: Checkout code
@@ -45,34 +40,44 @@ jobs:
     - name: Wait for MongoDB to be ready
       run: |
         echo "Waiting for MongoDB to be ready..."
-        timeout 60s bash -c 'until nc -z localhost 27017; do sleep 1; done'
+        timeout 120s bash -c 'until nc -z localhost 27017; do sleep 2; done'
         echo "MongoDB port is open, waiting for service to be fully ready..."
-        sleep 10
+        sleep 15
         echo "MongoDB is ready!"
 
     - name: Test MongoDB Connection
       run: |
         echo "Testing MongoDB connection from server directory..."
         cd server
-        timeout 30s node -e "
+        timeout 60s node -e "
           const mongoose = require('mongoose');
           console.log('Attempting to connect to MongoDB...');
-          mongoose.connect('mongodb://localhost:27017/exam_system_test', {
-            serverSelectionTimeoutMS: 10000,
-            connectTimeoutMS: 10000
-          })
-            .then(() => {
-              console.log('✅ MongoDB connection successful');
-              return mongoose.connection.close();
-            })
-            .then(() => {
-              console.log('✅ MongoDB connection closed successfully');
-              process.exit(0);
-            })
-            .catch((err) => {
-              console.error('❌ MongoDB connection failed:', err.message);
-              process.exit(1);
-            });
+          
+          // Set up connection with retry logic
+          const connectWithRetry = async () => {
+            for (let i = 0; i < 5; i++) {
+              try {
+                await mongoose.connect('mongodb://localhost:27017/exam_system_test', {
+                  serverSelectionTimeoutMS: 15000,
+                  connectTimeoutMS: 15000,
+                  socketTimeoutMS: 15000
+                });
+                console.log('✅ MongoDB connection successful');
+                await mongoose.connection.close();
+                console.log('✅ MongoDB connection closed successfully');
+                process.exit(0);
+              } catch (err) {
+                console.log(\`Attempt \${i + 1} failed: \${err.message}\`);
+                if (i === 4) throw err;
+                await new Promise(resolve => setTimeout(resolve, 3000));
+              }
+            }
+          };
+          
+          connectWithRetry().catch((err) => {
+            console.error('❌ MongoDB connection failed after all retries:', err.message);
+            process.exit(1);
+          });
         "
         echo "MongoDB connection test completed!"
 
