@@ -1,7 +1,7 @@
 {
   "name": "online-recruit-system-backend",
   "version": "1.0.0",
-  "description": "Backend for Online Recruitment Process – Online Examination System",
+  "description": "Backend made for Online Recruitment Process – Online Examination System",
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc",
