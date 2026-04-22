@@ -62,9 +62,7 @@ const SectionSchema = new mongoose_1.Schema({
 const ExamSchema = new mongoose_1.Schema({
     title: { type: String, required: true, trim: true },
     description: { type: String, required: true, trim: true },
-    startTime: { type: Date, required: true },
-    endTime: { type: Date, required: true },
-    duration: { type: Number, required: true, min: 1 },
+    duration: { type: Number, required: true, min: 1 }, // Duration in minutes
     createdBy: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', required: true },
     department: {
         type: String,

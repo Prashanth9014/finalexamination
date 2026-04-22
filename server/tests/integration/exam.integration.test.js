@@ -152,9 +152,9 @@ describe('Exam Integration Tests', () => {
 
   describe('GET /api/exams/:id', () => {
     test('should get exam details as admin', async () => {
-      // Create exam for this specific test
+      // Create exam within this test to avoid race conditions
       const examData = {
-        title: 'Test Exam for ID',
+        title: 'Test Exam for Admin',
         description: 'Test Description',
         duration: 60,
         language: 'Python',
@@ -180,6 +180,7 @@ describe('Exam Integration Tests', () => {
         .set('Authorization', `Bearer ${adminToken}`)
         .send(examData);
 
+      expect(createResponse.status).toBe(201);
       const examId = createResponse.body._id;
 
       const response = await request(app)
@@ -187,14 +188,14 @@ describe('Exam Integration Tests', () => {
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
 
-      expect(response.body.title).toBe('Test Exam for ID');
+      expect(response.body.title).toBe('Test Exam for Admin');
       expect(response.body.sections).toHaveLength(1);
     });
 
     test('should get exam as candidate', async () => {
       // Create exam for this specific test
       const examData = {
-        title: 'Test Exam for ID',
+        title: 'Test Exam for Candidate',
         description: 'Test Description',
         duration: 60,
         language: 'Python',
@@ -220,6 +221,9 @@ describe('Exam Integration Tests', () => {
         .set('Authorization', `Bearer ${adminToken}`)
         .send(examData);
 
+      expect(createResponse.status).toBe(201);
+      expect(createResponse.body._id).toBeDefined();
+      
       const examId = createResponse.body._id;
 
       const response = await request(app)
@@ -227,7 +231,7 @@ describe('Exam Integration Tests', () => {
         .set('Authorization', `Bearer ${candidateToken}`)
         .expect(200);
 
-      expect(response.body.title).toBe('Test Exam for ID');
+      expect(response.body.title).toBe('Test Exam for Candidate');
     });
 
     test('should return 404 for non-existent exam', async () => {

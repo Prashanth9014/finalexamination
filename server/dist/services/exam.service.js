@@ -101,8 +101,6 @@ async function createDraftExam(title, description, duration, adminId) {
         title,
         description,
         duration,
-        startTime: now,
-        endTime: new Date(now.getTime() + duration * 60000),
         createdBy: adminId,
         sections: [
             { title: 'Aptitude', questions: [] },
@@ -293,8 +291,6 @@ async function getExamForAttempt(examId) {
             _id: exam._id.toString(),
             title: exam.title,
             description: exam.description,
-            startTime: exam.startTime,
-            endTime: exam.endTime,
             duration: exam.duration,
             sections: sanitizedSections,
         },

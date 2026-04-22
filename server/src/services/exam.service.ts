@@ -5,9 +5,7 @@ import { Types } from 'mongoose';
 export interface CreateExamInput {
   title: string;
   description: string;
-  startTime: Date;
-  endTime: Date;
-  duration: number;
+  duration: number; // Duration in minutes - candidates can start anytime
   sections: ISection[];
   department?: string; // Kept for backward compatibility
   language?: string; // New language-based filtering
@@ -16,8 +14,6 @@ export interface CreateExamInput {
 export interface UpdateExamInput {
   title?: string;
   description?: string;
-  startTime?: Date;
-  endTime?: Date;
   duration?: number;
   sections?: ISection[];
 }
@@ -92,8 +88,6 @@ export async function createDraftExam(
     title,
     description,
     duration,
-    startTime: now,
-    endTime: new Date(now.getTime() + duration * 60000),
     createdBy: adminId,
     sections: [
       { title: 'Aptitude', questions: [] },
@@ -325,9 +319,7 @@ export interface SecureExamResponse {
     _id: string;
     title: string;
     description: string;
-    startTime: Date;
-    endTime: Date;
-    duration: number;
+    duration: number; // Duration in minutes
     sections: Array<{
       title: string;
       questions: Array<{
@@ -375,8 +367,6 @@ export async function getExamForAttempt(examId: string): Promise<SecureExamRespo
       _id: exam._id.toString(),
       title: exam.title,
       description: exam.description,
-      startTime: exam.startTime,
-      endTime: exam.endTime,
       duration: exam.duration,
       sections: sanitizedSections,
     },

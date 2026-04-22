@@ -29,9 +29,7 @@ export interface ISection {
 export interface IExam extends Document {
   title: string;
   description: string;
-  startTime: Date;
-  endTime: Date;
-  duration: number;
+  duration: number; // Duration in minutes - candidates can start anytime
   createdBy: mongoose.Types.ObjectId;
   department?: string; // For filtering: CSE, ECE, EEE, MECH, CIVIL, MBA (kept for backward compatibility)
   language?: string; // For language-based filtering: Python, Java, C, C++
@@ -81,9 +79,7 @@ const ExamSchema: Schema<IExam> = new Schema<IExam>(
   {
     title: { type: String, required: true, trim: true },
     description: { type: String, required: true, trim: true },
-    startTime: { type: Date, required: true },
-    endTime: { type: Date, required: true },
-    duration: { type: Number, required: true, min: 1 },
+    duration: { type: Number, required: true, min: 1 }, // Duration in minutes
     createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     department: {
       type: String,

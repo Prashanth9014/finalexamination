@@ -54,6 +54,7 @@ router.post('/login', auth_controller_1.login);
 router.post('/verify-otp', auth_controller_1.verifyOtpController);
 router.get('/me', auth_middleware_1.authenticate, auth_controller_1.getMe);
 // Password reset routes
+router.post('/check-email', password_reset_controller_1.checkEmailHandler);
 router.post('/forgot-password', password_reset_controller_1.forgotPasswordHandler);
 router.post('/reset-password', password_reset_controller_1.resetPasswordHandler);
 router.get('/verify-reset-token/:token', password_reset_controller_1.verifyResetTokenHandler);

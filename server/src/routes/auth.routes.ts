@@ -4,6 +4,7 @@ import {
   forgotPasswordHandler,
   resetPasswordHandler,
   verifyResetTokenHandler,
+  checkEmailHandler,
 } from '../controllers/password-reset.controller';
 import { authenticate } from '../middlewares/auth.middleware';
 
@@ -27,6 +28,7 @@ router.post('/verify-otp', verifyOtpController);
 router.get('/me', authenticate, getMe);
 
 // Password reset routes
+router.post('/check-email', checkEmailHandler);
 router.post('/forgot-password', forgotPasswordHandler);
 router.post('/reset-password', resetPasswordHandler);
 router.get('/verify-reset-token/:token', verifyResetTokenHandler);

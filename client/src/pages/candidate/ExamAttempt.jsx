@@ -40,48 +40,139 @@ const ExamAttempt = () => {
   const [pendingSectionIndex, setPendingSectionIndex] = useState(null)
   const [showWriteCodeModal, setShowWriteCodeModal] = useState(false)
 
+  // Custom Modal System - Replace all browser alerts with React modals
+  const [showViolationModal, setShowViolationModal] = useState(false)
+  const [violationModalData, setViolationModalData] = useState({
+    type: '', // 'tab-switch', 'fullscreen-exit', 'offline', 'terminated'
+    title: '',
+    message: '',
+    violationCount: 0,
+    maxViolations: 3
+  })
+  const [showOfflineModal, setShowOfflineModal] = useState(false)
+  const [showCodeErrorModal, setShowCodeErrorModal] = useState(false)
 
-  // Violation tracking system
+  // Professional Violation Handling System
+  // Based on industry standards used by major proctoring companies
   const lastViolationTimeRef = useRef(0) // Debounce protection for violations
   const isAlertOpenRef = useRef(false) // Prevent violations while alert is active
-  const violationWindowRef = useRef(null) // Track violation window to prevent double-counting
+  const activeViolationSessionRef = useRef(null) // Track active violation session
+  const pendingEventsRef = useRef(new Set()) // Track pending browser events
 
-  // Centralized violation counting function - prevents any double violations
-  const countViolation = (reason, forceCount = false) => {
+  // Custom Modal Functions - Replace browser alerts
+  const showViolationAlert = (type, violationCount, maxViolations = 3) => {
+    const modalData = {
+      type,
+      violationCount,
+      maxViolations
+    }
+
+    switch (type) {
+      case 'tab-switch':
+        modalData.title = 'Proctoring Alert'
+        modalData.message = 'Tab switching detected during exam'
+        break
+      case 'fullscreen-exit':
+        modalData.title = 'Proctoring Alert'
+        modalData.message = 'Fullscreen mode was exited during exam'
+        break
+      case 'shortcut-blocked':
+        modalData.title = 'Action Blocked'
+        modalData.message = 'This keyboard shortcut is not allowed during the exam'
+        break
+      case 'terminated':
+        modalData.title = 'Exam Terminated'
+        modalData.message = 'Maximum violations exceeded due to suspicious activity'
+        break
+      default:
+        modalData.title = 'Proctoring Alert'
+        modalData.message = 'Violation detected during exam'
+    }
+
+    setViolationModalData(modalData)
+    setShowViolationModal(true)
+    
+    // Mark alert as active to prevent additional violations
+    isAlertOpenRef.current = true
+  }
+
+  const closeViolationModal = () => {
+    setShowViolationModal(false)
+    
+    // Check if exam should be terminated
+    if (violationModalData.type === 'terminated') {
+      handleSubmitDueToViolation()
+      return
+    }
+    
+    // Professional dialog cleanup - prevents click-related violations
+    setTimeout(() => {
+      isAlertOpenRef.current = false
+      console.log(`[PROCTORING] Custom modal cleared - resuming violation monitoring`)
+    }, 500) // Shorter delay since it's a custom modal, not browser alert
+  }
+
+  const showOfflineAlert = () => {
+    if (isOfflineAlertShownRef.current) return
+    isOfflineAlertShownRef.current = true
+    setShowOfflineModal(true)
+  }
+
+  const closeOfflineModal = () => {
+    setShowOfflineModal(false)
+  }
+
+  const showCodeAlert = () => {
+    setShowCodeErrorModal(true)
+  }
+
+  const closeCodeErrorModal = () => {
+    setShowCodeErrorModal(false)
+  }
+  // Professional violation detection - groups related events into single violations
+  const countViolation = (reason, eventType = 'user_action', forceCount = false) => {
     const now = Date.now()
     
-    // Check if this is a duplicate violation within debounce period
-    if (!forceCount && now - lastViolationTimeRef.current < 1000) {
-      console.log(`Violation debounced: ${reason}`)
-      return getViolationCount()
-    }
-    
+    // Block violations during alerts (custom modals)
     if (isAlertOpenRef.current) {
-      console.log(`Violation blocked during alert: ${reason}`)
+      console.log(`[PROCTORING] Violation blocked - custom modal active: ${reason}`)
       return getViolationCount()
     }
 
-    // Universal double-violation prevention
-    // If any violation occurred within the last 1000ms, don't count another one
-    if (violationWindowRef.current) {
-      const timeDiff = now - violationWindowRef.current.timestamp
+    // Professional Event Grouping System
+    // Groups multiple browser events from single user action
+    if (activeViolationSessionRef.current) {
+      const timeSinceSession = now - activeViolationSessionRef.current.startTime
+      const sessionWindow = 2000 // 2-second window for event grouping
       
-      // Extended protection window for dialog-related events (3 seconds)
-      const protectionWindow = violationWindowRef.current.reason.includes('Tab switch') || 
-                              violationWindowRef.current.reason.includes('fullscreen') ? 3000 : 1000
-      
-      // If any violation event occurs within protection window, combine them
-      if (timeDiff < protectionWindow) {
-        const combinedReason = `${violationWindowRef.current.reason} + ${reason} (Combined action)`
-        console.log(`Combined violation detected: ${combinedReason} (Protected for ${protectionWindow}ms)`)
+      if (timeSinceSession < sessionWindow) {
+        // Add event to current session
+        activeViolationSessionRef.current.events.push({
+          reason,
+          eventType,
+          timestamp: now
+        })
         
-        // Update the reason but don't increment count
-        violationWindowRef.current.reason = combinedReason
+        console.log(`[PROCTORING] Event grouped into active session: ${reason}`)
+        console.log(`[PROCTORING] Session events: ${activeViolationSessionRef.current.events.map(e => e.reason).join(', ')}`)
+        
         return getViolationCount()
       } else {
-        // Previous violation window expired, clear it
-        violationWindowRef.current = null
+        // Previous session expired, clear it
+        console.log(`[PROCTORING] Previous violation session completed with ${activeViolationSessionRef.current.events.length} events`)
+        activeViolationSessionRef.current = null
       }
+    }
+
+    // Start new violation session
+    activeViolationSessionRef.current = {
+      startTime: now,
+      primaryReason: reason,
+      events: [{
+        reason,
+        eventType,
+        timestamp: now
+      }]
     }
 
     // Count the violation
@@ -89,21 +180,31 @@ const ExamAttempt = () => {
     const currentCount = getViolationCount()
     const newCount = currentCount + 1
     localStorage.setItem(`violations_${examId}`, newCount.toString())
-    console.log(`Violation counted: ${reason}. Count: ${newCount}/3`)
     
-    // Set violation window to prevent double-counting
-    violationWindowRef.current = {
-      reason: reason,
-      timestamp: now
+    console.log(`[PROCTORING] NEW VIOLATION DETECTED: ${reason}`)
+    console.log(`[PROCTORING] Violation count: ${newCount}/3`)
+    console.log(`[PROCTORING] Started violation session - grouping window: 2000ms`)
+    
+    // Show custom modal instead of browser alert
+    if (newCount > 3) {
+      showViolationAlert('terminated', newCount, 3)
+    } else {
+      // Determine violation type for appropriate modal
+      let violationType = 'general'
+      if (reason.includes('Tab switch')) violationType = 'tab-switch'
+      else if (reason.includes('Fullscreen exit')) violationType = 'fullscreen-exit'
+      else if (reason.includes('shortcut') || reason.includes('Blocked')) violationType = 'shortcut-blocked'
+      
+      showViolationAlert(violationType, newCount, 3)
     }
     
-    // Clear violation window after appropriate time (extended for dialog-related events)
-    const clearTimeout = reason.includes('Tab switch') || reason.includes('fullscreen') ? 3000 : 1000
+    // Auto-clear session after window expires
     setTimeout(() => {
-      if (violationWindowRef.current && violationWindowRef.current.timestamp === now) {
-        violationWindowRef.current = null
+      if (activeViolationSessionRef.current && activeViolationSessionRef.current.startTime === now) {
+        console.log(`[PROCTORING] Violation session auto-cleared`)
+        activeViolationSessionRef.current = null
       }
-    }, clearTimeout)
+    }, 2000)
     
     return newCount
   }
@@ -163,15 +264,14 @@ const ExamAttempt = () => {
     }
   }
 
-  // Internet connectivity handlers
+  // Internet connectivity handlers - Use custom modals
   const handleOffline = () => {
-    if (isOfflineAlertShownRef.current) return
-    isOfflineAlertShownRef.current = true
-    alert('⚠️ Internet connection lost. Please check your network to continue the exam safely.')
+    showOfflineAlert()
   }
 
   const handleOnline = () => {
     isOfflineAlertShownRef.current = false
+    setShowOfflineModal(false)
     console.log('Internet connection restored')
   }
 
@@ -354,11 +454,10 @@ const ExamAttempt = () => {
     }
   }, [])
 
-  // Check initial offline state
+  // Check initial offline state - Use custom modal
   useEffect(() => {
     if (!navigator.onLine && !isOfflineAlertShownRef.current) {
-      isOfflineAlertShownRef.current = true
-      alert('⚠️ You are currently offline. Please ensure stable internet connection.')
+      showOfflineAlert()
     }
   }, [])
 
@@ -373,26 +472,83 @@ const ExamAttempt = () => {
         document.mozFullScreenElement ||
         document.msFullscreenElement)
 
-    // keydown: intercept Ctrl+R / F5 to prevent browser reload dialog.
-    // Show custom reload modal instead — fullscreen never breaks, no browser popup.
+    // Professional Keyboard Shortcut Detection System
+    // Detects all common violation shortcuts used in professional proctoring
     const handleKeyDown = (e) => {
       const sub = submissionRef.current
       if (!sub || sub.status !== 'in-progress') return
       if (isConfirmDialogOpenRef.current) return
 
+      // Professional Violation Shortcut Detection
+      const violationShortcuts = {
+        // Tab switching shortcuts
+        'Alt+Tab': e.altKey && e.key === 'Tab',
+        'Ctrl+Tab': e.ctrlKey && e.key === 'Tab',
+        'Cmd+Tab': e.metaKey && e.key === 'Tab', // Mac
+        
+        // Window management shortcuts
+        'Windows+Tab': e.metaKey && e.key === 'Tab', // Windows Task View
+        'Alt+Esc': e.altKey && e.key === 'Escape',
+        'Ctrl+Alt+Tab': e.ctrlKey && e.altKey && e.key === 'Tab',
+        
+        // Application switching
+        'Alt+F4': e.altKey && e.key === 'F4',
+        'Cmd+Q': e.metaKey && e.key === 'q', // Mac Quit
+        'Cmd+W': e.metaKey && e.key === 'w', // Mac Close Window
+        
+        // System shortcuts
+        'Ctrl+Shift+Esc': e.ctrlKey && e.shiftKey && e.key === 'Escape', // Task Manager
+        'Windows+L': e.metaKey && e.key === 'l', // Lock Screen
+        'Windows+D': e.metaKey && e.key === 'd', // Show Desktop
+        'Windows+M': e.metaKey && e.key === 'm', // Minimize All
+        
+        // Browser shortcuts that could be violations
+        'Ctrl+Shift+N': e.ctrlKey && e.shiftKey && e.key === 'N', // Incognito
+        'Ctrl+Shift+T': e.ctrlKey && e.shiftKey && e.key === 'T', // Reopen Tab
+        'Ctrl+N': e.ctrlKey && e.key === 'n', // New Window
+        'Ctrl+T': e.ctrlKey && e.key === 't', // New Tab
+        'Ctrl+W': e.ctrlKey && e.key === 'w', // Close Tab
+        
+        // Developer tools
+        'F12': e.key === 'F12',
+        'Ctrl+Shift+I': e.ctrlKey && e.shiftKey && e.key === 'I',
+        'Ctrl+Shift+J': e.ctrlKey && e.shiftKey && e.key === 'J',
+        'Ctrl+U': e.ctrlKey && e.key === 'u', // View Source
+      }
+
+      // Check for violation shortcuts
+      for (const [shortcutName, isPressed] of Object.entries(violationShortcuts)) {
+        if (isPressed) {
+          e.preventDefault()
+          e.stopPropagation()
+          
+          console.log(`[PROCTORING] Blocked violation shortcut: ${shortcutName}`)
+          countViolation(`Blocked shortcut: ${shortcutName}`, 'keyboard_shortcut')
+          return
+        }
+      }
+
+      // Handle reload shortcuts separately (show custom modal)
       const isReloadKey = (e.ctrlKey && (e.key === 'r' || e.key === 'R')) || e.key === 'F5'
-      if (!isReloadKey) return
+      if (isReloadKey) {
+        e.preventDefault()
+        e.stopPropagation()
+        console.log(`[PROCTORING] Blocked reload attempt - showing custom modal`)
+        setShowReloadModal(true)
+        return
+      }
 
-      // Prevent browser from showing its own reload dialog
-      e.preventDefault()
-      e.stopPropagation()
-
-      // Show custom modal — fullscreen stays intact
-      setShowReloadModal(true)
+      // Handle ESC key (fullscreen exit attempt)
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        e.stopPropagation()
+        console.log(`[PROCTORING] Blocked ESC key - potential fullscreen exit attempt`)
+        countViolation('ESC key pressed', 'keyboard_shortcut')
+        return
+      }
     }
 
     // visibilitychange: tab switch / window minimize detection only.
-    // Cancel detection is handled by the keydown timeout above.
     const handleVisibilityChange = () => {
       const sub = submissionRef.current
       if (!sub || sub.status !== 'in-progress' || isSubmittingExamRef.current) return
@@ -402,27 +558,10 @@ const ExamAttempt = () => {
       // Skip if hidden due to Ctrl+R dialog
       if (document.hidden && (isReloadKeyPressedRef.current || isUnloadingRef.current)) return
 
-      // Normal tab switch / window minimize
+      // Normal tab switch / window minimize - Use custom modal system
       if (document.hidden && !isAlertOpenRef.current) {
-        const newCount = countViolation('Tab switch')
-        
-        // Show alert immediately after counting
-        const currentCount = getViolationCount()
-        if (currentCount > 0 && !isAlertOpenRef.current) {
-          isAlertOpenRef.current = true
-          
-          // Set a longer protection window to prevent violations during and after alert
-          setTimeout(() => {
-            isAlertOpenRef.current = false
-          }, 2000) // 2 seconds protection after alert is dismissed
-          
-          if (currentCount <= 3) {
-            alert(`Warning: You switched tabs. Violations: ${currentCount}/3`)
-          } else {
-            alert('Exam terminated due to malpractice')
-            handleSubmitDueToViolation()
-          }
-        }
+        const newCount = countViolation('Tab switch', 'user_action')
+        // Custom modal is shown by countViolation function
       }
     }
 
@@ -447,27 +586,10 @@ const ExamAttempt = () => {
           return
         }
 
-        // Normal fullscreen exit (ESC, window minimize, etc.)
+        // Normal fullscreen exit (ESC, window minimize, etc.) - Use custom modal system
         if (!document.hidden && !isAlertOpenRef.current) {
-          const newCount = countViolation('Fullscreen exit')
-          
-          // Show alert immediately after counting
-          const currentCount = getViolationCount()
-          if (currentCount > 0 && !isAlertOpenRef.current) {
-            isAlertOpenRef.current = true
-            
-            // Set a longer protection window to prevent violations during and after alert
-            setTimeout(() => {
-              isAlertOpenRef.current = false
-            }, 2000) // 2 seconds protection after alert is dismissed
-            
-            if (currentCount <= 3) {
-              alert(`Warning: You exited fullscreen. Violations: ${currentCount}/3`)
-            } else {
-              alert('Exam terminated due to malpractice')
-              handleSubmitDueToViolation()
-            }
-          }
+          const newCount = countViolation('Fullscreen exit', 'user_action')
+          // Custom modal is shown by countViolation function
         }
 
         fullscreenCheckTimeout = setTimeout(() => {
@@ -492,52 +614,9 @@ const ExamAttempt = () => {
       }
     }
 
-    // Handle mouse clicks (can detect clicks on browser dialog buttons)
-    const handleMouseClick = (e) => {
-      // If an alert is active and user clicks, extend the protection window
-      if (isAlertOpenRef.current) {
-        console.log('Mouse click detected during alert - extending protection window')
-        // Extend protection for another 2 seconds after click
-        setTimeout(() => {
-          if (isAlertOpenRef.current) {
-            isAlertOpenRef.current = false
-          }
-        }, 2000)
-      }
-    }
-
-    // Handle window focus events (can be triggered by clicking OK on browser dialogs)
-    const handleWindowFocus = () => {
-      // If an alert was recently shown, don't count focus events as violations
-      if (isAlertOpenRef.current) {
-        console.log('Window focus event blocked - alert is active')
-        return
-      }
-      
-      // Additional protection: if we're within 3 seconds of a violation, ignore focus events
-      if (violationWindowRef.current) {
-        const timeDiff = Date.now() - violationWindowRef.current.timestamp
-        if (timeDiff < 3000) {
-          console.log('Window focus event blocked - within violation protection window')
-          return
-        }
-      }
-    }
-
-    // Handle window blur events (can be triggered by browser dialogs)
-    const handleWindowBlur = () => {
-      // If an alert is active, don't count blur events as violations
-      if (isAlertOpenRef.current) {
-        console.log('Window blur event blocked - alert is active')
-        return
-      }
-    }
-
+    // Professional Event Listener Setup - Industry Standard Approach
     document.addEventListener('keydown', handleKeyDown)
-    document.addEventListener('click', handleMouseClick, true) // Use capture phase to catch all clicks
     window.addEventListener('pageshow', handlePageShow)
-    window.addEventListener('focus', handleWindowFocus)
-    window.addEventListener('blur', handleWindowBlur)
     document.addEventListener('fullscreenchange', handleFullscreenChange)
     document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
     document.addEventListener('mozfullscreenchange', handleFullscreenChange)
@@ -547,10 +626,7 @@ const ExamAttempt = () => {
     return () => {
       if (fullscreenCheckTimeout) clearTimeout(fullscreenCheckTimeout)
       document.removeEventListener('keydown', handleKeyDown)
-      document.removeEventListener('click', handleMouseClick, true)
       window.removeEventListener('pageshow', handlePageShow)
-      window.removeEventListener('focus', handleWindowFocus)
-      window.removeEventListener('blur', handleWindowBlur)
       document.removeEventListener('fullscreenchange', handleFullscreenChange)
       document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
       document.removeEventListener('mozfullscreenchange', handleFullscreenChange)
@@ -734,7 +810,7 @@ const ExamAttempt = () => {
     const question = exam.sections[sectionIndex].questions[questionIndex]
 
     if (!code || !code.trim()) {
-      alert('Please write some code before running.')
+      showCodeAlert()
       return
     }
 
@@ -910,16 +986,32 @@ const ExamAttempt = () => {
     })
   }
 
-  // Navigation functions
+  // Navigation functions - Enhanced for empty sections
   const handlePrevious = () => {
     if (currentQuestionIndex > 0) {
+      // Move to previous question in same section
       setCurrentQuestionIndex(currentQuestionIndex - 1)
+    } else if (currentSection > 0) {
+      // Move to previous section
+      const prevSection = currentSection - 1
+      const prevSectionQuestions = exam.sections[prevSection].questions.length
+      setCurrentSection(prevSection)
+      setCurrentQuestionIndex(prevSectionQuestions > 0 ? prevSectionQuestions - 1 : 0)
     }
   }
 
   const handleNext = () => {
     const currentSectionData = exam.sections[currentSection]
     const totalQuestionsInSection = currentSectionData.questions.length
+
+    if (totalQuestionsInSection === 0) {
+      // Empty section - move directly to next section
+      if (currentSection < exam.sections.length - 1) {
+        setCurrentSection(currentSection + 1)
+        setCurrentQuestionIndex(0)
+      }
+      return
+    }
 
     if (currentQuestionIndex < totalQuestionsInSection - 1) {
       // Move to next question in same section
@@ -928,17 +1020,6 @@ const ExamAttempt = () => {
       // Last question in section - check if there are unanswered questions
       const unansweredCount = getUnansweredCount(currentSection)
 
-      // if (unansweredCount > 0) {
-      //   isConfirmDialogOpenRef.current = true
-      //   const confirmed = window.confirm(
-      //     `You have not attempted ${unansweredCount} question(s) in this section. Are you sure you want to move to the next section?`
-      //   )
-      //   isConfirmDialogOpenRef.current = false
-      //   if (!confirmed) {
-      //     setTimeout(() => requestFullscreen(), 200)
-      //     return
-      //   }
-      // }
       if (unansweredCount > 0) {
         setPendingSectionIndex(currentSection + 1)
         setShowSectionWarningModal(true)
@@ -950,6 +1031,46 @@ const ExamAttempt = () => {
         setCurrentQuestionIndex(0)
       }
     }
+  }
+
+  // Check if we can navigate to previous
+  const canNavigatePrevious = () => {
+    return currentQuestionIndex > 0 || currentSection > 0
+  }
+
+  // Check if we can navigate to next
+  const canNavigateNext = () => {
+    const currentSectionData = exam.sections[currentSection]
+    const totalQuestionsInSection = currentSectionData.questions.length
+    
+    // If empty section, can navigate if not last section
+    if (totalQuestionsInSection === 0) {
+      return currentSection < exam.sections.length - 1
+    }
+    
+    // If has questions, can navigate if not last question of last section
+    return !(currentQuestionIndex === totalQuestionsInSection - 1 && currentSection === exam.sections.length - 1)
+  }
+
+  // Get navigation button text
+  const getNextButtonText = () => {
+    const currentSectionData = exam.sections[currentSection]
+    const totalQuestionsInSection = currentSectionData.questions.length
+    
+    // If empty section
+    if (totalQuestionsInSection === 0) {
+      if (currentSection < exam.sections.length - 1) {
+        return `Next Section (${exam.sections[currentSection + 1].title}) →`
+      }
+      return 'Next →'
+    }
+    
+    // If last question in section and not last section
+    if (currentQuestionIndex === totalQuestionsInSection - 1 && currentSection < exam.sections.length - 1) {
+      return `Next Section (${exam.sections[currentSection + 1].title}) →`
+    }
+    
+    return 'Next →'
   }
 
   const getUnansweredCount = (sectionIndex) => {
@@ -1152,9 +1273,27 @@ const ExamAttempt = () => {
               </div>
 
               {exam.sections[currentSection].questions.length === 0 ? (
-                <p style={{ color: '#7f8c8d', fontStyle: 'italic' }}>
-                  No questions in this section.
-                </p>
+                <div style={{
+                  textAlign: 'center',
+                  padding: '60px 20px',
+                  backgroundColor: '#f8f9fa',
+                  borderRadius: '12px',
+                  border: '2px dashed #dee2e6',
+                  margin: '20px 0'
+                }}>
+                  <div style={{ fontSize: '48px', marginBottom: '16px', color: '#6c757d' }}>
+                    📝
+                  </div>
+                  <h3 style={{ color: '#495057', marginBottom: '12px' }}>
+                    No Questions in This Section
+                  </h3>
+                  <p style={{ color: '#6c757d', fontSize: '16px', marginBottom: '20px' }}>
+                    This section doesn't contain any questions at the moment.
+                  </p>
+                  <p style={{ color: '#6c757d', fontSize: '14px' }}>
+                    Use the navigation buttons below to move to other sections.
+                  </p>
+                </div>
               ) : (
                 <>
                   {/* Single Question Display */}
@@ -1325,47 +1464,45 @@ const ExamAttempt = () => {
                       </div>
                     )
                   })()}
-
-                  {/* Navigation Buttons */}
-                  <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    marginTop: '24px',
-                    paddingTop: '20px',
-                    borderTop: '2px solid #ecf0f1'
-                  }}>
-                    <button
-                      onClick={handlePrevious}
-                      className="btn btn-secondary"
-                      disabled={currentQuestionIndex === 0}
-                      style={{
-                        padding: '12px 24px',
-                        fontSize: '16px',
-                        opacity: currentQuestionIndex === 0 ? 0.5 : 1,
-                        cursor: currentQuestionIndex === 0 ? 'not-allowed' : 'pointer'
-                      }}
-                    >
-                      ← Previous
-                    </button>
-
-                    <button
-                      onClick={handleNext}
-                      className="btn btn-primary"
-                      disabled={currentQuestionIndex === exam.sections[currentSection].questions.length - 1 && currentSection === exam.sections.length - 1}
-                      style={{
-                        padding: '12px 24px',
-                        fontSize: '16px',
-                        opacity: (currentQuestionIndex === exam.sections[currentSection].questions.length - 1 && currentSection === exam.sections.length - 1) ? 0.5 : 1,
-                        cursor: (currentQuestionIndex === exam.sections[currentSection].questions.length - 1 && currentSection === exam.sections.length - 1) ? 'not-allowed' : 'pointer'
-                      }}
-                    >
-                      {currentQuestionIndex === exam.sections[currentSection].questions.length - 1 && currentSection < exam.sections.length - 1
-                        ? `Next Section (${exam.sections[currentSection + 1].title}) →`
-                        : 'Next →'}
-                    </button>
-                  </div>
                 </>
               )}
+
+              {/* Navigation Buttons - Always visible */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                marginTop: '24px',
+                paddingTop: '20px',
+                borderTop: '2px solid #ecf0f1'
+              }}>
+                <button
+                  onClick={handlePrevious}
+                  className="btn btn-secondary"
+                  disabled={!canNavigatePrevious()}
+                  style={{
+                    padding: '12px 24px',
+                    fontSize: '16px',
+                    opacity: !canNavigatePrevious() ? 0.5 : 1,
+                    cursor: !canNavigatePrevious() ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  ← Previous
+                </button>
+
+                <button
+                  onClick={handleNext}
+                  className="btn btn-primary"
+                  disabled={!canNavigateNext()}
+                  style={{
+                    padding: '12px 24px',
+                    fontSize: '16px',
+                    opacity: !canNavigateNext() ? 0.5 : 1,
+                    cursor: !canNavigateNext() ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {getNextButtonText()}
+                </button>
+              </div>
             </div>
           )}
         </div> {/* End blur wrapper */}
@@ -1765,7 +1902,8 @@ const ExamAttempt = () => {
         </div>
       )}
 
-      {/* Resume Exam Overlay */}      {showResumeOverlay && (
+      {/* Resume Exam Overlay */}
+      {showResumeOverlay && (
         <div style={{
           position: 'fixed',
           top: 0,
@@ -1809,6 +1947,216 @@ const ExamAttempt = () => {
               onMouseLeave={(e) => e.target.style.backgroundColor = '#3498db'}
             >
               Enter Fullscreen
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Violation Modal - Replaces browser alerts */}
+      {showViolationModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.8)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 10000
+        }}>
+          <div style={{
+            backgroundColor: '#fff', borderRadius: '12px',
+            padding: '40px 50px', maxWidth: '500px', width: '90%',
+            textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+            border: violationModalData.type === 'terminated' ? '3px solid #e74c3c' : '3px solid #f39c12'
+          }}>
+            <div style={{ 
+              fontSize: '48px', 
+              marginBottom: '16px',
+              color: violationModalData.type === 'terminated' ? '#e74c3c' : '#f39c12'
+            }}>
+              {violationModalData.type === 'terminated' ? '🚫' : '⚠️'}
+            </div>
+            
+            <h2 style={{ 
+              color: violationModalData.type === 'terminated' ? '#e74c3c' : '#f39c12', 
+              marginTop: 0, marginBottom: '16px',
+              fontSize: '24px', fontWeight: 'bold'
+            }}>
+              {violationModalData.title}
+            </h2>
+            
+            <p style={{ 
+              color: '#333', fontSize: '18px', marginBottom: '16px', 
+              lineHeight: '1.6', fontWeight: '500'
+            }}>
+              {violationModalData.message}
+            </p>
+            
+            {violationModalData.type !== 'terminated' && (
+              <>
+                <div style={{
+                  backgroundColor: '#f8f9fa', padding: '16px', borderRadius: '8px',
+                  marginBottom: '24px', border: '2px solid #e9ecef'
+                }}>
+                  <div style={{ 
+                    fontSize: '20px', fontWeight: 'bold', 
+                    color: violationModalData.violationCount >= violationModalData.maxViolations ? '#e74c3c' : '#f39c12',
+                    marginBottom: '8px'
+                  }}>
+                    Violations: {violationModalData.violationCount} / {violationModalData.maxViolations}
+                  </div>
+                  <div style={{ fontSize: '14px', color: '#666' }}>
+                    {violationModalData.maxViolations - violationModalData.violationCount} violation(s) remaining
+                  </div>
+                </div>
+                
+                <p style={{ 
+                  color: '#666', fontSize: '14px', marginBottom: '24px',
+                  fontStyle: 'italic'
+                }}>
+                  Further violations will result in automatic exam termination
+                </p>
+              </>
+            )}
+            
+            <button
+              onClick={closeViolationModal}
+              style={{
+                padding: '14px 32px', borderRadius: '8px', border: 'none',
+                backgroundColor: violationModalData.type === 'terminated' ? '#e74c3c' : '#3498db',
+                color: '#fff', fontSize: '16px', fontWeight: 'bold', 
+                cursor: 'pointer', minWidth: '120px',
+                transition: 'all 0.3s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.transform = 'translateY(-2px)'
+                e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)'
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = 'translateY(0)'
+                e.target.style.boxShadow = 'none'
+              }}
+            >
+              {violationModalData.type === 'terminated' ? 'End Exam' : 'I Understand'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Offline Modal - Replaces browser alerts */}
+      {showOfflineModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.8)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 10000
+        }}>
+          <div style={{
+            backgroundColor: '#fff', borderRadius: '12px',
+            padding: '40px 50px', maxWidth: '450px', width: '90%',
+            textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+            border: '3px solid #e67e22'
+          }}>
+            <div style={{ fontSize: '48px', marginBottom: '16px', color: '#e67e22' }}>
+              📡
+            </div>
+            
+            <h2 style={{ 
+              color: '#e67e22', marginTop: 0, marginBottom: '16px',
+              fontSize: '24px', fontWeight: 'bold'
+            }}>
+              Connection Lost
+            </h2>
+            
+            <p style={{ 
+              color: '#333', fontSize: '18px', marginBottom: '24px', 
+              lineHeight: '1.6', fontWeight: '500'
+            }}>
+              Internet connection lost. Please check your network to continue the exam safely.
+            </p>
+            
+            <div style={{
+              backgroundColor: '#fff3cd', padding: '12px', borderRadius: '6px',
+              marginBottom: '24px', border: '1px solid #ffeaa7'
+            }}>
+              <p style={{ 
+                color: '#856404', fontSize: '14px', margin: 0,
+                fontWeight: '500'
+              }}>
+                Your exam progress is automatically saved. Restore connection to continue.
+              </p>
+            </div>
+            
+            <button
+              onClick={closeOfflineModal}
+              style={{
+                padding: '14px 32px', borderRadius: '8px', border: 'none',
+                backgroundColor: '#e67e22', color: '#fff',
+                fontSize: '16px', fontWeight: 'bold', cursor: 'pointer',
+                transition: 'all 0.3s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.transform = 'translateY(-2px)'
+                e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)'
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = 'translateY(0)'
+                e.target.style.boxShadow = 'none'
+              }}
+            >
+              I'll Check Connection
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Code Error Modal - Replaces browser alerts */}
+      {showCodeErrorModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 10000
+        }}>
+          <div style={{
+            backgroundColor: '#fff', borderRadius: '12px',
+            padding: '36px 40px', maxWidth: '400px', width: '90%',
+            textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+            border: '3px solid #3498db'
+          }}>
+            <div style={{ fontSize: '48px', marginBottom: '16px', color: '#3498db' }}>
+              💻
+            </div>
+            
+            <h2 style={{ 
+              color: '#3498db', marginTop: 0, marginBottom: '16px',
+              fontSize: '22px', fontWeight: 'bold'
+            }}>
+              Code Required
+            </h2>
+            
+            <p style={{ 
+              color: '#333', fontSize: '16px', marginBottom: '24px',
+              lineHeight: '1.6'
+            }}>
+              Please write your code before running the execution.
+            </p>
+            
+            <button
+              onClick={closeCodeErrorModal}
+              style={{
+                padding: '12px 32px', borderRadius: '8px', border: 'none',
+                backgroundColor: '#3498db', color: '#fff',
+                fontSize: '16px', fontWeight: 'bold', cursor: 'pointer',
+                transition: 'all 0.3s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.transform = 'translateY(-2px)'
+                e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)'
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = 'translateY(0)'
+                e.target.style.boxShadow = 'none'
+              }}
+            >
+              OK, Got It
             </button>
           </div>
         </div>

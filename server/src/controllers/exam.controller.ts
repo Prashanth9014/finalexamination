@@ -41,18 +41,10 @@ function validateCreateExamInput(body: any): CreateExamInput {
     throw new Error(`Department must be one of: ${validDepartments.join(', ')}`);
   }
 
-  // Generate default startTime and endTime for duration-based exams
-  // These are kept for backward compatibility but not enforced
-  const now = new Date();
-  const startTime = now;
-  const endTime = new Date(now.getTime() + duration * 60 * 1000);
-
   return {
     title,
     description,
-    startTime,
-    endTime,
-    duration,
+    duration, // Duration-based exam - candidates can start anytime
     sections,
     department,
     language,
@@ -146,8 +138,6 @@ export async function updateExamHandler(
 
     if (req.body.title) updateData.title = req.body.title;
     if (req.body.description) updateData.description = req.body.description;
-    if (req.body.startTime) updateData.startTime = new Date(req.body.startTime);
-    if (req.body.endTime) updateData.endTime = new Date(req.body.endTime);
     if (req.body.duration != null) updateData.duration = req.body.duration;
     if (req.body.sections) updateData.sections = req.body.sections;
 

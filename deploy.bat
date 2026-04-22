@@ -48,7 +48,7 @@ echo.
 echo ========================================
 echo ✅ Deployment completed successfully!
 echo ========================================
-echo Application is running on: http://192.168.29.104:5050
+echo Application is running on: http://192.168.29.174:5050
 echo.
 
 cd ..

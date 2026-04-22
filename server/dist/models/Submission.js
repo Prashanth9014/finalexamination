@@ -54,41 +54,15 @@ const SubmissionSchema = new mongoose_1.Schema({
     examId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Exam', required: true },
     examTitle: { type: String, required: false },
     answers: [AnswerSchema],
-    score: { type: Number, default: 0 },
-    totalMarks: { type: Number, default: 0 },
-    percentage: { type: Number, default: 0 },
-    sectionScores: {
-        type: {
-            aptitude: { type: Number, default: 0 },
-            reasoning: { type: Number, default: 0 },
-            technical: { type: Number, default: 0 },
-            coding: { type: Number, default: 0 },
-        },
-        default: { aptitude: 0, reasoning: 0, technical: 0, coding: 0 },
-    },
     correctAnswers: {
-        type: {
-            aptitude: { type: Number, default: 0 },
-            reasoning: { type: Number, default: 0 },
-            technical: { type: Number, default: 0 },
-        },
-        default: { aptitude: 0, reasoning: 0, technical: 0 },
+        type: mongoose_1.Schema.Types.Mixed, // Dynamic object for section names
+        default: {},
     },
     questionCounts: {
-        type: {
-            aptitude: { type: Number, default: 0 },
-            reasoning: { type: Number, default: 0 },
-            technical: { type: Number, default: 0 },
-            coding: { type: Number, default: 0 },
-        },
-        default: { aptitude: 0, reasoning: 0, technical: 0, coding: 0 },
+        type: mongoose_1.Schema.Types.Mixed, // Dynamic object for section names
+        default: {},
     },
     codingSubmitted: { type: Number, default: 0 },
-    result: {
-        type: String,
-        enum: ['PASS', 'FAIL', 'PENDING'],
-        default: 'PENDING',
-    },
     startedAt: { type: Date, required: true },
     submittedAt: { type: Date },
     status: {

@@ -24,9 +24,8 @@ async function testExamCreation() {
     const testExam = {
       title: 'TEST-EXAM-' + Date.now(),
       description: 'Test exam for debugging',
-      startTime: new Date(),
-      endTime: new Date(Date.now() + 60 * 60 * 1000),
-      duration: 60,
+      duration: 60, // Duration-based exam - candidates can start anytime
+      language: 'Python', // Required field for new exam structure
       createdBy: new mongoose.Types.ObjectId(),
       sections: [
         {

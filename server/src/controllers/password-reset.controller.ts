@@ -37,6 +37,42 @@ function validateResetPasswordBody(body: any): ResetPasswordInput {
 }
 
 /**
+ * POST /api/auth/check-email
+ * Check if email exists in the system (for forgot password flow)
+ */
+export async function checkEmailHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const { email } = req.body;
+
+    if (!email || typeof email !== 'string') {
+      res.status(400).json({ message: 'Email is required' });
+      return;
+    }
+
+    const { User } = await import('../models/User');
+    const user = await User.findOne({ email: email.toLowerCase() }).exec();
+
+    if (user) {
+      res.status(200).json({ 
+        exists: true, 
+        message: 'Email found in our system' 
+      });
+    } else {
+      res.status(200).json({ 
+        exists: false, 
+        message: 'No account found with this email address' 
+      });
+    }
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
  * POST /api/auth/forgot-password
  * Request password reset email
  */

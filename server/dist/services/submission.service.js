@@ -86,28 +86,9 @@ If you wish to reattempt, please contact the admin.`);
         examId: examObjectId,
         examTitle: exam.title,
         answers: [],
-        score: 0,
-        totalMarks: 0,
-        percentage: 0,
-        sectionScores: {
-            aptitude: 0,
-            reasoning: 0,
-            technical: 0,
-            coding: 0,
-        },
-        correctAnswers: {
-            aptitude: 0,
-            reasoning: 0,
-            technical: 0,
-        },
-        questionCounts: {
-            aptitude: 0,
-            reasoning: 0,
-            technical: 0,
-            coding: 0,
-        },
+        correctAnswers: {},
+        questionCounts: {},
         codingSubmitted: 0,
-        result: 'PENDING',
         startedAt: now,
         status: 'in-progress',
     };
@@ -156,19 +137,11 @@ async function submitExam(submissionId, userId, input) {
     }
     // Calculate comprehensive score (now async with test case execution)
     const scoreResult = await calculateScore(exam, input.answers);
-    // Determine pass/fail (cutoff: 60%)
-    const cutoffPercentage = 60;
-    const result = scoreResult.percentage >= cutoffPercentage ? 'PASS' : 'FAIL';
-    // Update submission
+    // Update submission with new structure
     submission.answers = input.answers;
-    submission.score = scoreResult.totalScore;
-    submission.totalMarks = scoreResult.totalMarks;
-    submission.percentage = scoreResult.percentage;
-    submission.sectionScores = scoreResult.sectionScores;
-    submission.correctAnswers = scoreResult.correctAnswers; // NEW
-    submission.questionCounts = scoreResult.questionCounts; // NEW
-    submission.codingSubmitted = scoreResult.codingSubmitted; // NEW
-    submission.result = result;
+    submission.correctAnswers = scoreResult.correctAnswers;
+    submission.questionCounts = scoreResult.questionCounts;
+    submission.codingSubmitted = scoreResult.codingSubmitted;
     submission.submittedAt = new Date();
     submission.status = 'submitted';
     await submission.save();
@@ -307,79 +280,35 @@ async function calculateScore(exam, answers) {
     answers.forEach((answer) => {
         answerMap.set(answer.questionId, answer);
     });
-    // Initialize section scores and marks (kept for backward compatibility)
-    const sectionScores = {
-        aptitude: 0,
-        reasoning: 0,
-        technical: 0,
-        coding: 0,
-    };
-    const sectionMarks = {
-        aptitude: 0,
-        reasoning: 0,
-        technical: 0,
-        coding: 0,
-    };
-    // NEW: Initialize correct answer counts
-    const correctAnswers = {
-        aptitude: 0,
-        reasoning: 0,
-        technical: 0,
-    };
-    // NEW: Initialize question counts
-    const questionCounts = {
-        aptitude: 0,
-        reasoning: 0,
-        technical: 0,
-        coding: 0,
-    };
-    // NEW: Initialize coding submitted count
+    // Initialize dynamic correct answer counts and question counts
+    const correctAnswers = {};
+    const questionCounts = {};
     let codingSubmitted = 0;
     // Iterate through exam sections and questions
     for (let sectionIndex = 0; sectionIndex < exam.sections.length; sectionIndex++) {
         const section = exam.sections[sectionIndex];
         const sectionName = section.title.toLowerCase();
-        let sectionKey;
-        // Map section title to section key
-        if (sectionName.includes('aptitude')) {
-            sectionKey = 'aptitude';
-        }
-        else if (sectionName.includes('reasoning')) {
-            sectionKey = 'reasoning';
-        }
-        else if (sectionName.includes('technical')) {
-            sectionKey = 'technical';
-        }
-        else if (sectionName.includes('coding')) {
-            sectionKey = 'coding';
-        }
-        else {
-            // Default to technical for unknown sections
-            sectionKey = 'technical';
-        }
+        // Initialize counts for this section
+        if (!correctAnswers[sectionName])
+            correctAnswers[sectionName] = 0;
+        if (!questionCounts[sectionName])
+            questionCounts[sectionName] = 0;
         for (let questionIndex = 0; questionIndex < section.questions.length; questionIndex++) {
             const question = section.questions[questionIndex];
             const questionId = `${sectionIndex}-${questionIndex}`;
             const userAnswer = answerMap.get(questionId);
-            const questionMarks = question.marks || 0;
             // Count total questions per section
-            questionCounts[sectionKey]++;
-            // Add to total marks for this section (kept for backward compatibility)
-            sectionMarks[sectionKey] += questionMarks;
+            questionCounts[sectionName]++;
             if (!userAnswer) {
                 continue; // No answer provided
             }
             // Evaluate MCQ questions
             if (question.type === 'mcq' && question.correctAnswer) {
                 if (userAnswer.selectedOption === question.correctAnswer) {
-                    sectionScores[sectionKey] += questionMarks; // Keep for backward compatibility
-                    // NEW: Count correct answer
-                    if (sectionKey !== 'coding') {
-                        correctAnswers[sectionKey]++;
-                    }
+                    correctAnswers[sectionName]++;
                 }
             }
-            // Handle coding questions - NO AUTOMATIC EVALUATION
+            // Handle coding questions - count submissions
             if (question.type === 'coding') {
                 // Check if candidate submitted code (stored in selectedOption)
                 const submittedCode = userAnswer.selectedOption || userAnswer.codingAnswer;
@@ -395,23 +324,13 @@ async function calculateScore(exam, answers) {
                     const hasActualCode = !defaultTemplates.some(template => submittedCode === template ||
                         submittedCode?.trim().startsWith(template) && submittedCode.trim().length < template.length + 50);
                     if (hasActualCode) {
-                        // NEW: Count as submitted (no score calculation)
                         codingSubmitted++;
                     }
                 }
             }
         }
     }
-    // Calculate totals (kept for backward compatibility)
-    const totalScore = Object.values(sectionScores).reduce((sum, score) => sum + score, 0);
-    const totalMarks = Object.values(sectionMarks).reduce((sum, marks) => sum + marks, 0);
-    // Calculate percentage (avoid division by zero)
-    const percentage = totalMarks > 0 ? (totalScore / totalMarks) * 100 : 0;
     return {
-        totalScore,
-        totalMarks,
-        percentage: Math.round(percentage * 100) / 100,
-        sectionScores,
         correctAnswers,
         questionCounts,
         codingSubmitted,
@@ -419,7 +338,7 @@ async function calculateScore(exam, answers) {
 }
 async function getMySubmissions(userId) {
     const allSubmissions = await Submission_1.Submission.find({ userId })
-        .populate('examId', 'title description startTime endTime duration')
+        .populate('examId', 'title description duration')
         .sort({ createdAt: -1 })
         .exec();
     // Filter out duplicate submissions for the same exam
@@ -497,7 +416,7 @@ async function getAllSubmissions() {
     console.log('=== GET ALL SUBMISSIONS SERVICE ===');
     const allSubmissions = await Submission_1.Submission.find()
         .populate('userId', 'name email role')
-        .populate('examId', 'title description startTime endTime duration')
+        .populate('examId', 'title description duration')
         .sort({ createdAt: -1 })
         .exec();
     console.log(`✅ Found ${allSubmissions.length} total submissions`);

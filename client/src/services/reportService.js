@@ -2,7 +2,7 @@ import api from './api'
 
 export const reportService = {
   async getProgrammingLanguageReport(language) {
-    const response = await api.get('/admin/report', {
+    const response = await api.get('/admins/report', {
       params: { language },
     })
     return response.data
@@ -10,7 +10,7 @@ export const reportService = {
   
   // Keep old method for backward compatibility
   async getDepartmentReport(department) {
-    const response = await api.get('/admin/department-report', {
+    const response = await api.get('/admins/department-report', {
       params: { department },
     })
     return response.data
