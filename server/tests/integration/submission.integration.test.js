@@ -63,6 +63,9 @@ describe('Submission Integration Tests', () => {
       .set('Authorization', `Bearer ${adminToken}`)
       .send(examData);
     
+    if (examResponse.status !== 201) {
+      console.error('Exam creation failed:', examResponse.status, examResponse.body);
+    }
     examId = examResponse.body._id;
   });
 

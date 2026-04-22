@@ -3,9 +3,17 @@ jest.mock('../../../dist/models/Exam', () => ({
   Exam: {
     create: jest.fn(),
     find: jest.fn(),
-    findById: jest.fn(),
-    findByIdAndUpdate: jest.fn(),
-    findByIdAndDelete: jest.fn(),
+    findById: jest.fn().mockReturnValue({
+      exec: jest.fn(),
+      populate: jest.fn().mockReturnThis()
+    }),
+    findByIdAndUpdate: jest.fn().mockReturnValue({
+      exec: jest.fn(),
+      populate: jest.fn().mockReturnThis()
+    }),
+    findByIdAndDelete: jest.fn().mockReturnValue({
+      exec: jest.fn()
+    }),
     modelName: 'Exam',
     collection: { name: 'exams' }
   }
@@ -22,10 +30,22 @@ jest.mock('../../../dist/models/User', () => ({
   }
 }));
 
+// Mock Submission model for exam service
+jest.mock('../../../dist/models/Submission', () => ({
+  Submission: {
+    find: jest.fn().mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        exec: jest.fn()
+      })
+    })
+  }
+}));
+
 // NOW import everything after mocking
 const { createExam, getAllExams, getExamById, updateExam, deleteExam, getExamsForCandidate } = require('../../../dist/services/exam.service');
 const { Exam } = require('../../../dist/models/Exam');
 const { User } = require('../../../dist/models/User');
+const { Submission } = require('../../../dist/models/Submission');
 const { Types } = require('mongoose');
 
 describe('Exam Service', () => {
@@ -56,7 +76,9 @@ describe('Exam Service', () => {
         ]
       };
 
-      const adminId = new Types.ObjectId();
+      const adminId = {
+        toString: () => new Types.ObjectId().toString()
+      };
       const mockExam = {
         _id: new Types.ObjectId(),
         ...examData,
@@ -69,7 +91,10 @@ describe('Exam Service', () => {
       };
 
       Exam.create.mockResolvedValue(mockExam);
-      Exam.findById.mockResolvedValue(mockExam);
+      Exam.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(mockExam),
+        populate: jest.fn().mockReturnThis()
+      });
 
       const result = await createExam(examData, adminId);
 
@@ -85,7 +110,9 @@ describe('Exam Service', () => {
         title: '', // Invalid empty title
         duration: -1 // Invalid negative duration
       };
-      const adminId = new Types.ObjectId();
+      const adminId = {
+        toString: () => new Types.ObjectId().toString()
+      };
 
       Exam.create.mockRejectedValue(new Error('Validation failed'));
 
@@ -117,8 +144,9 @@ describe('Exam Service', () => {
 
   describe('getExamsForCandidate', () => {
     test('should return filtered exams for candidate with language preference', async () => {
+      const userId = new Types.ObjectId().toString();
       const mockUser = {
-        _id: 'userId',
+        _id: userId,
         preferredLanguage: 'Python',
         department: 'CSE'
       };
@@ -134,6 +162,12 @@ describe('Exam Service', () => {
         })
       });
 
+      Submission.find.mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue([])
+        })
+      });
+
       Exam.find.mockReturnValue({
         populate: jest.fn().mockReturnValue({
           sort: jest.fn().mockReturnValue({
@@ -142,7 +176,7 @@ describe('Exam Service', () => {
         })
       });
 
-      const result = await getExamsForCandidate('userId');
+      const result = await getExamsForCandidate(userId);
 
       expect(result).toBeDefined();
       expect(Exam.find).toHaveBeenCalledWith({ 
@@ -152,8 +186,9 @@ describe('Exam Service', () => {
     });
 
     test('should return all exams for candidate without preferences', async () => {
+      const userId = new Types.ObjectId().toString();
       const mockUser = {
-        _id: 'userId',
+        _id: userId,
         preferredLanguage: null,
         department: null
       };
@@ -170,6 +205,12 @@ describe('Exam Service', () => {
         })
       });
 
+      Submission.find.mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue([])
+        })
+      });
+
       Exam.find.mockReturnValue({
         populate: jest.fn().mockReturnValue({
           sort: jest.fn().mockReturnValue({
@@ -178,7 +219,7 @@ describe('Exam Service', () => {
         })
       });
 
-      const result = await getExamsForCandidate('userId');
+      const result = await getExamsForCandidate(userId);
 
       expect(result).toBeDefined();
       expect(Exam.find).toHaveBeenCalledWith({ status: 'created' });
@@ -187,7 +228,7 @@ describe('Exam Service', () => {
 
   describe('getExamById', () => {
     test('should return exam by ID', async () => {
-      const examId = new Types.ObjectId();
+      const examId = new Types.ObjectId().toString();
       const mockExam = {
         _id: examId,
         title: 'Test Exam',
@@ -200,7 +241,7 @@ describe('Exam Service', () => {
         })
       });
 
-      const result = await getExamById(examId.toString());
+      const result = await getExamById(examId);
 
       expect(result).toEqual(mockExam);
       expect(Exam.findById).toHaveBeenCalledWith(examId);
@@ -215,7 +256,7 @@ describe('Exam Service', () => {
     });
 
     test('should return null for non-existent exam', async () => {
-      const examId = new Types.ObjectId();
+      const examId = new Types.ObjectId().toString();
 
       Exam.findById.mockReturnValue({
         populate: jest.fn().mockReturnValue({
@@ -223,7 +264,7 @@ describe('Exam Service', () => {
         })
       });
 
-      const result = await getExamById(examId.toString());
+      const result = await getExamById(examId);
 
       expect(result).toBeNull();
     });
@@ -231,7 +272,7 @@ describe('Exam Service', () => {
 
   describe('updateExam', () => {
     test('should update exam successfully', async () => {
-      const examId = new Types.ObjectId();
+      const examId = new Types.ObjectId().toString();
       const updateData = {
         title: 'Updated Exam',
         description: 'Updated Description'
@@ -248,7 +289,7 @@ describe('Exam Service', () => {
         })
       });
 
-      const result = await updateExam(examId.toString(), updateData);
+      const result = await updateExam(examId, updateData);
 
       expect(result).toEqual(mockUpdatedExam);
       expect(Exam.findByIdAndUpdate).toHaveBeenCalledWith(
@@ -261,7 +302,7 @@ describe('Exam Service', () => {
 
   describe('deleteExam', () => {
     test('should delete exam successfully', async () => {
-      const examId = new Types.ObjectId();
+      const examId = new Types.ObjectId().toString();
       const mockExam = {
         _id: examId,
         title: 'Test Exam'
@@ -271,20 +312,20 @@ describe('Exam Service', () => {
         exec: jest.fn().mockResolvedValue(mockExam)
       });
 
-      const result = await deleteExam(examId.toString());
+      const result = await deleteExam(examId);
 
       expect(result).toBe(true);
       expect(Exam.findByIdAndDelete).toHaveBeenCalledWith(examId);
     });
 
     test('should return false for non-existent exam', async () => {
-      const examId = new Types.ObjectId();
+      const examId = new Types.ObjectId().toString();
 
       Exam.findByIdAndDelete.mockReturnValue({
         exec: jest.fn().mockResolvedValue(null)
       });
 
-      const result = await deleteExam(examId.toString());
+      const result = await deleteExam(examId);
 
       expect(result).toBe(false);
     });

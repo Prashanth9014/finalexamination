@@ -82,7 +82,7 @@ jobs:
         echo "MongoDB connection test completed!"
 
     - name: Run Unit Tests (No Database)
-      run: cd server && npm test tests/unit/utils/password.test.js tests/unit/utils/jwt.test.js tests/unit/middlewares/auth.middleware.test.js tests/unit/middlewares/role.middleware.test.js
+      run: cd server && npm run test:unit
       env:
         NODE_ENV: test
         JWT_SECRET: test-secret-key-for-ci-pipeline-minimum-32-chars
@@ -95,7 +95,7 @@ jobs:
         JWT_SECRET: test-secret-key-for-ci-pipeline-minimum-32-chars
 
     - name: Run All Tests Together (Final Verification)
-      run: cd server && timeout 300s npm test tests/unit/utils/password.test.js tests/unit/utils/jwt.test.js tests/unit/middlewares/auth.middleware.test.js tests/unit/middlewares/role.middleware.test.js tests/integration/auth.integration.test.js tests/integration/admin.integration.test.js tests/integration/exam.integration.test.js
+      run: cd server && timeout 300s npm test
       env:
         NODE_ENV: test
         MONGODB_URI: mongodb://localhost:27017/exam_system_test

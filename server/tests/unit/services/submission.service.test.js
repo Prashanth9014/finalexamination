@@ -45,7 +45,10 @@ describe('Submission Service', () => {
   describe('startExam', () => {
     test('should start exam successfully for new candidate', async () => {
       const examId = new Types.ObjectId().toString();
-      const userId = new Types.ObjectId();
+      const userIdString = new Types.ObjectId().toString();
+      const userId = {
+        toString: () => userIdString
+      };
       
       const mockExam = {
         _id: examId,
@@ -61,7 +64,9 @@ describe('Submission Service', () => {
 
       const mockSubmission = {
         _id: new Types.ObjectId(),
-        userId,
+        userId: {
+          toString: () => userIdString
+        },
         examId,
         status: 'in-progress',
         answers: []
@@ -81,25 +86,29 @@ describe('Submission Service', () => {
         })
       });
 
-      Submission.create.mockResolvedValue(mockSubmission);
+      Submission.findOneAndUpdate.mockResolvedValue(mockSubmission);
 
       const result = await startExam(examId, userId);
 
       expect(result.submission).toEqual(mockSubmission);
       expect(result.exam).toEqual(mockExam);
-      expect(Submission.create).toHaveBeenCalled();
+      expect(Submission.findOneAndUpdate).toHaveBeenCalled();
     });
 
     test('should throw error for invalid exam ID', async () => {
       const invalidExamId = 'invalid-id';
-      const userId = new Types.ObjectId();
+      const userId = {
+        toString: () => new Types.ObjectId().toString()
+      };
 
       await expect(startExam(invalidExamId, userId)).rejects.toThrow('Invalid exam ID');
     });
 
     test('should throw error if exam not found', async () => {
       const examId = new Types.ObjectId().toString();
-      const userId = new Types.ObjectId();
+      const userId = {
+        toString: () => new Types.ObjectId().toString()
+      };
 
       Exam.findById.mockReturnValue({
         exec: jest.fn().mockResolvedValue(null)
@@ -110,7 +119,9 @@ describe('Submission Service', () => {
 
     test('should prevent duplicate submission', async () => {
       const examId = new Types.ObjectId().toString();
-      const userId = new Types.ObjectId();
+      const userId = {
+        toString: () => new Types.ObjectId().toString()
+      };
       
       const mockExam = {
         _id: examId,
@@ -148,7 +159,9 @@ describe('Submission Service', () => {
 
     test('should allow resume for in-progress submission', async () => {
       const examId = new Types.ObjectId().toString();
-      const userId = new Types.ObjectId();
+      const userId = {
+        toString: () => new Types.ObjectId().toString()
+      };
       
       const mockExam = {
         _id: examId,
@@ -191,7 +204,10 @@ describe('Submission Service', () => {
   describe('saveMcqAnswer', () => {
     test('should save MCQ answer successfully', async () => {
       const submissionId = new Types.ObjectId().toString();
-      const userId = new Types.ObjectId();
+      const userIdString = new Types.ObjectId().toString();
+      const userId = {
+        toString: () => userIdString
+      };
       const input = {
         questionId: 'q1',
         selectedOption: 'A'
@@ -199,7 +215,9 @@ describe('Submission Service', () => {
 
       const mockSubmission = {
         _id: submissionId,
-        userId: userId,
+        userId: {
+          toString: () => userIdString
+        },
         answers: [],
         status: 'in-progress',
         save: jest.fn().mockResolvedValue(true)
@@ -219,7 +237,10 @@ describe('Submission Service', () => {
 
     test('should update existing MCQ answer', async () => {
       const submissionId = new Types.ObjectId().toString();
-      const userId = new Types.ObjectId();
+      const userIdString = new Types.ObjectId().toString();
+      const userId = {
+        toString: () => userIdString
+      };
       const input = {
         questionId: 'q1',
         selectedOption: 'B'
@@ -227,7 +248,9 @@ describe('Submission Service', () => {
 
       const mockSubmission = {
         _id: submissionId,
-        userId: userId,
+        userId: {
+          toString: () => userIdString
+        },
         answers: [
           { questionId: 'q1', selectedOption: 'A' }
         ],
@@ -247,7 +270,9 @@ describe('Submission Service', () => {
 
     test('should throw error if submission not found', async () => {
       const submissionId = new Types.ObjectId().toString();
-      const userId = new Types.ObjectId();
+      const userId = {
+        toString: () => new Types.ObjectId().toString()
+      };
       const input = { questionId: 'q1', selectedOption: 'A' };
 
       Submission.findById.mockReturnValue({
@@ -261,7 +286,10 @@ describe('Submission Service', () => {
   describe('saveCodingAnswer', () => {
     test('should save coding answer successfully', async () => {
       const submissionId = new Types.ObjectId().toString();
-      const userId = new Types.ObjectId();
+      const userIdString = new Types.ObjectId().toString();
+      const userId = {
+        toString: () => userIdString
+      };
       const input = {
         questionId: 'q1',
         language: 'Python',
@@ -271,7 +299,9 @@ describe('Submission Service', () => {
 
       const mockSubmission = {
         _id: submissionId,
-        userId: userId,
+        userId: {
+          toString: () => userIdString
+        },
         answers: [],
         status: 'in-progress',
         save: jest.fn().mockResolvedValue(true)
@@ -294,7 +324,10 @@ describe('Submission Service', () => {
   describe('submitExam', () => {
     test('should submit exam and calculate score', async () => {
       const submissionId = new Types.ObjectId().toString();
-      const userId = new Types.ObjectId();
+      const userIdString = new Types.ObjectId().toString();
+      const userId = {
+        toString: () => userIdString
+      };
       const input = {
         answers: [
           { questionId: 'q1', selectedOption: 'A' },
@@ -304,7 +337,9 @@ describe('Submission Service', () => {
 
       const mockSubmission = {
         _id: submissionId,
-        userId: userId,
+        userId: {
+          toString: () => userIdString
+        },
         examId: new Types.ObjectId(),
         answers: [],
         status: 'in-progress',
@@ -366,12 +401,17 @@ describe('Submission Service', () => {
 
     test('should throw error if submission already submitted', async () => {
       const submissionId = new Types.ObjectId().toString();
-      const userId = new Types.ObjectId();
+      const userIdString = new Types.ObjectId().toString();
+      const userId = {
+        toString: () => userIdString
+      };
       const input = { answers: [] };
 
       const mockSubmission = {
         _id: submissionId,
-        userId: userId,
+        userId: {
+          toString: () => userIdString
+        },
         status: 'submitted'
       };
 
@@ -386,10 +426,15 @@ describe('Submission Service', () => {
   describe('getSavedAnswers', () => {
     test('should return saved answers', async () => {
       const submissionId = new Types.ObjectId().toString();
-      const userId = new Types.ObjectId();
+      const userIdString = new Types.ObjectId().toString();
+      const userId = {
+        toString: () => userIdString
+      };
       const mockSubmission = {
         _id: submissionId,
-        userId: userId,
+        userId: {
+          toString: () => userIdString
+        },
         answers: [
           { questionId: 'q1', selectedOption: 'A' },
           { questionId: 'q2', codingAnswer: 'print("test")' }
@@ -408,14 +453,18 @@ describe('Submission Service', () => {
 
     test('should throw error for invalid submission ID', async () => {
       const invalidId = 'invalid-id';
-      const userId = new Types.ObjectId();
+      const userId = {
+        toString: () => new Types.ObjectId().toString()
+      };
 
       await expect(getSavedAnswers(invalidId, userId)).rejects.toThrow('Invalid submission ID');
     });
 
     test('should throw error if submission not found', async () => {
       const submissionId = new Types.ObjectId().toString();
-      const userId = new Types.ObjectId();
+      const userId = {
+        toString: () => new Types.ObjectId().toString()
+      };
 
       Submission.findById.mockReturnValue({
         exec: jest.fn().mockResolvedValue(null)
@@ -426,8 +475,12 @@ describe('Submission Service', () => {
 
     test('should throw error for unauthorized access', async () => {
       const submissionId = new Types.ObjectId().toString();
-      const userId = new Types.ObjectId();
-      const differentUserId = new Types.ObjectId();
+      const userId = {
+        toString: () => new Types.ObjectId().toString()
+      };
+      const differentUserId = {
+        toString: () => new Types.ObjectId().toString()
+      };
       const mockSubmission = {
         _id: submissionId,
         userId: differentUserId,
