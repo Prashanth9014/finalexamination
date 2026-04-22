@@ -5,7 +5,8 @@ jest.mock('../../../dist/models/Submission', () => ({
     find: jest.fn(),
     findOne: jest.fn(),
     findById: jest.fn(),
-    findByIdAndUpdate: jest.fn()
+    findByIdAndUpdate: jest.fn(),
+    findOneAndUpdate: jest.fn()
   }
 }));
 
@@ -190,12 +191,17 @@ describe('Submission Service', () => {
   describe('saveMcqAnswer', () => {
     test('should save MCQ answer successfully', async () => {
       const submissionId = new Types.ObjectId().toString();
-      const questionId = 'q1';
-      const selectedOption = 'A';
+      const userId = new Types.ObjectId();
+      const input = {
+        questionId: 'q1',
+        selectedOption: 'A'
+      };
 
       const mockSubmission = {
         _id: submissionId,
+        userId: userId,
         answers: [],
+        status: 'in-progress',
         save: jest.fn().mockResolvedValue(true)
       };
 
@@ -203,24 +209,29 @@ describe('Submission Service', () => {
         exec: jest.fn().mockResolvedValue(mockSubmission)
       });
 
-      const result = await saveMcqAnswer(submissionId, questionId, selectedOption);
+      const result = await saveMcqAnswer(submissionId, userId, input);
 
       expect(result.answers).toHaveLength(1);
-      expect(result.answers[0].questionId).toBe(questionId);
-      expect(result.answers[0].selectedOption).toBe(selectedOption);
+      expect(result.answers[0].questionId).toBe(input.questionId);
+      expect(result.answers[0].selectedOption).toBe(input.selectedOption);
       expect(mockSubmission.save).toHaveBeenCalled();
     });
 
     test('should update existing MCQ answer', async () => {
       const submissionId = new Types.ObjectId().toString();
-      const questionId = 'q1';
-      const newOption = 'B';
+      const userId = new Types.ObjectId();
+      const input = {
+        questionId: 'q1',
+        selectedOption: 'B'
+      };
 
       const mockSubmission = {
         _id: submissionId,
+        userId: userId,
         answers: [
           { questionId: 'q1', selectedOption: 'A' }
         ],
+        status: 'in-progress',
         save: jest.fn().mockResolvedValue(true)
       };
 
@@ -228,33 +239,41 @@ describe('Submission Service', () => {
         exec: jest.fn().mockResolvedValue(mockSubmission)
       });
 
-      const result = await saveMcqAnswer(submissionId, questionId, newOption);
+      const result = await saveMcqAnswer(submissionId, userId, input);
 
       expect(result.answers).toHaveLength(1);
-      expect(result.answers[0].selectedOption).toBe(newOption);
+      expect(result.answers[0].selectedOption).toBe(input.selectedOption);
     });
 
     test('should throw error if submission not found', async () => {
       const submissionId = new Types.ObjectId().toString();
+      const userId = new Types.ObjectId();
+      const input = { questionId: 'q1', selectedOption: 'A' };
 
       Submission.findById.mockReturnValue({
         exec: jest.fn().mockResolvedValue(null)
       });
 
-      await expect(saveMcqAnswer(submissionId, 'q1', 'A')).rejects.toThrow('Submission not found');
+      await expect(saveMcqAnswer(submissionId, userId, input)).rejects.toThrow('Submission not found');
     });
   });
 
   describe('saveCodingAnswer', () => {
     test('should save coding answer successfully', async () => {
       const submissionId = new Types.ObjectId().toString();
-      const questionId = 'q1';
-      const codingAnswer = 'print("Hello World")';
-      const language = 'Python';
+      const userId = new Types.ObjectId();
+      const input = {
+        questionId: 'q1',
+        language: 'Python',
+        code: 'print("Hello World")',
+        executed: true
+      };
 
       const mockSubmission = {
         _id: submissionId,
+        userId: userId,
         answers: [],
+        status: 'in-progress',
         save: jest.fn().mockResolvedValue(true)
       };
 
@@ -262,25 +281,30 @@ describe('Submission Service', () => {
         exec: jest.fn().mockResolvedValue(mockSubmission)
       });
 
-      const result = await saveCodingAnswer(submissionId, questionId, codingAnswer, language);
+      const result = await saveCodingAnswer(submissionId, userId, input);
 
       expect(result.answers).toHaveLength(1);
-      expect(result.answers[0].questionId).toBe(questionId);
-      expect(result.answers[0].codingAnswer).toBe(codingAnswer);
-      expect(result.answers[0].language).toBe(language);
+      expect(result.answers[0].questionId).toBe(input.questionId);
+      expect(result.answers[0].selectedOption).toBe(input.code);
+      expect(result.answers[0].language).toBe(input.language);
+      expect(mockSubmission.save).toHaveBeenCalled();
     });
   });
 
   describe('submitExam', () => {
     test('should submit exam and calculate score', async () => {
       const submissionId = new Types.ObjectId().toString();
-      const answers = [
-        { questionId: 'q1', selectedOption: 'A' },
-        { questionId: 'q2', codingAnswer: 'print("test")', language: 'Python' }
-      ];
+      const userId = new Types.ObjectId();
+      const input = {
+        answers: [
+          { questionId: 'q1', selectedOption: 'A' },
+          { questionId: 'q2', codingAnswer: 'print("test")', language: 'Python' }
+        ]
+      };
 
       const mockSubmission = {
         _id: submissionId,
+        userId: userId,
         examId: new Types.ObjectId(),
         answers: [],
         status: 'in-progress',
@@ -331,7 +355,7 @@ describe('Submission Service', () => {
         score: 10
       });
 
-      const result = await submitExam(submissionId, { answers });
+      const result = await submitExam(submissionId, userId, input);
 
       expect(result.status).toBe('submitted');
       expect(result.correctAnswers).toBeDefined();
@@ -342,9 +366,12 @@ describe('Submission Service', () => {
 
     test('should throw error if submission already submitted', async () => {
       const submissionId = new Types.ObjectId().toString();
+      const userId = new Types.ObjectId();
+      const input = { answers: [] };
 
       const mockSubmission = {
         _id: submissionId,
+        userId: userId,
         status: 'submitted'
       };
 
@@ -352,15 +379,17 @@ describe('Submission Service', () => {
         exec: jest.fn().mockResolvedValue(mockSubmission)
       });
 
-      await expect(submitExam(submissionId, { answers: [] })).rejects.toThrow('Submission already submitted');
+      await expect(submitExam(submissionId, userId, input)).rejects.toThrow('Submission already completed');
     });
   });
 
   describe('getSavedAnswers', () => {
     test('should return saved answers', async () => {
       const submissionId = new Types.ObjectId().toString();
+      const userId = new Types.ObjectId();
       const mockSubmission = {
         _id: submissionId,
+        userId: userId,
         answers: [
           { questionId: 'q1', selectedOption: 'A' },
           { questionId: 'q2', codingAnswer: 'print("test")' }
@@ -368,27 +397,48 @@ describe('Submission Service', () => {
       };
 
       Submission.findById.mockReturnValue({
-        select: jest.fn().mockReturnValue({
-          exec: jest.fn().mockResolvedValue(mockSubmission)
-        })
+        exec: jest.fn().mockResolvedValue(mockSubmission)
       });
 
-      const result = await getSavedAnswers(submissionId);
+      const result = await getSavedAnswers(submissionId, userId);
 
-      expect(result.answers).toHaveLength(2);
-      expect(result.answers[0].questionId).toBe('q1');
+      expect(result).toHaveLength(2);
+      expect(result[0].questionId).toBe('q1');
+    });
+
+    test('should throw error for invalid submission ID', async () => {
+      const invalidId = 'invalid-id';
+      const userId = new Types.ObjectId();
+
+      await expect(getSavedAnswers(invalidId, userId)).rejects.toThrow('Invalid submission ID');
     });
 
     test('should throw error if submission not found', async () => {
       const submissionId = new Types.ObjectId().toString();
+      const userId = new Types.ObjectId();
 
       Submission.findById.mockReturnValue({
-        select: jest.fn().mockReturnValue({
-          exec: jest.fn().mockResolvedValue(null)
-        })
+        exec: jest.fn().mockResolvedValue(null)
       });
 
-      await expect(getSavedAnswers(submissionId)).rejects.toThrow('Submission not found');
+      await expect(getSavedAnswers(submissionId, userId)).rejects.toThrow('Submission not found');
+    });
+
+    test('should throw error for unauthorized access', async () => {
+      const submissionId = new Types.ObjectId().toString();
+      const userId = new Types.ObjectId();
+      const differentUserId = new Types.ObjectId();
+      const mockSubmission = {
+        _id: submissionId,
+        userId: differentUserId,
+        answers: []
+      };
+
+      Submission.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(mockSubmission)
+      });
+
+      await expect(getSavedAnswers(submissionId, userId)).rejects.toThrow('Unauthorized: This is not your submission');
     });
   });
 });
