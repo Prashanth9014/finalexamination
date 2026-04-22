@@ -48,9 +48,12 @@ export async function startExamHandler(
     console.error('=== END ERROR ===');
     
     if (error instanceof Error) {
+      if (error.message === 'Exam not found') {
+        res.status(404).json({ message: error.message });
+        return;
+      }
       const knownErrors = [
         'Invalid exam ID',
-        'Exam not found',
         'Exam has not started yet',
         'Exam has already ended',
         'You have already attempted this exam',

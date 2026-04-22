@@ -6,9 +6,10 @@ const { Submission } = require('../../dist/models/Submission');
 describe('Auth Integration Tests', () => {
   describe('POST /api/auth/register', () => {
     test('should register new user', async () => {
+      const timestamp = Date.now();
       const userData = {
         name: 'Test User',
-        email: 'test@example.com',
+        email: `test-${timestamp}@example.com`,
         password: 'password123',
         role: 'candidate'
       };
@@ -30,9 +31,10 @@ describe('Auth Integration Tests', () => {
     });
 
     test('should not register user with existing email', async () => {
+      const timestamp = Date.now();
       const userData = {
         name: 'Test User',
-        email: 'test@example.com',
+        email: `test-${timestamp}@example.com`,
         password: 'password123',
         role: 'candidate'
       };
@@ -69,9 +71,10 @@ describe('Auth Integration Tests', () => {
   describe('POST /api/auth/login', () => {
     test('should login with correct credentials', async () => {
       // Create a test user first
+      const timestamp = Date.now();
       const userData = {
         name: 'Test User',
-        email: 'test@example.com',
+        email: `test-${timestamp}@example.com`,
         password: 'password123',
         role: 'candidate'
       };
@@ -82,7 +85,7 @@ describe('Auth Integration Tests', () => {
         .send(userData);
 
       const loginData = {
-        email: 'test@example.com',
+        email: `test-${timestamp}@example.com`,
         password: 'password123'
       };
 
@@ -98,9 +101,10 @@ describe('Auth Integration Tests', () => {
 
     test('should not login with incorrect password', async () => {
       // Create a test user first
+      const timestamp = Date.now();
       const userData = {
         name: 'Test User',
-        email: 'test@example.com',
+        email: `test-${timestamp}@example.com`,
         password: 'password123',
         role: 'candidate'
       };
@@ -110,7 +114,7 @@ describe('Auth Integration Tests', () => {
         .send(userData);
 
       const loginData = {
-        email: 'test@example.com',
+        email: `test-${timestamp}@example.com`,
         password: 'wrongpassword'
       };
 
@@ -123,8 +127,9 @@ describe('Auth Integration Tests', () => {
     });
 
     test('should not login with non-existent email', async () => {
+      const timestamp = Date.now();
       const loginData = {
-        email: 'nonexistent@example.com',
+        email: `nonexistent-${timestamp}@example.com`,
         password: 'password123'
       };
 

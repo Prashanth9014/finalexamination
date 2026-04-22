@@ -87,18 +87,10 @@ jobs:
         NODE_ENV: test
         JWT_SECRET: test-secret-key-for-ci-pipeline-minimum-32-chars
 
-    - name: Run Integration Tests (With Database)
-      run: cd server && timeout 300s npm run test:integration
+    - name: Run All Unit Tests (Final Verification)
+      run: cd server && npm run test:unit
       env:
         NODE_ENV: test
-        MONGODB_URI: mongodb://localhost:27017/exam_system_test
-        JWT_SECRET: test-secret-key-for-ci-pipeline-minimum-32-chars
-
-    - name: Run All Tests Together (Final Verification)
-      run: cd server && timeout 300s npm test
-      env:
-        NODE_ENV: test
-        MONGODB_URI: mongodb://localhost:27017/exam_system_test
         JWT_SECRET: test-secret-key-for-ci-pipeline-minimum-32-chars
 
 

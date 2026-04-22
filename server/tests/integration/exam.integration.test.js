@@ -8,16 +8,17 @@ describe('Exam Integration Tests', () => {
   let adminToken, candidateToken;
 
   beforeEach(async () => {
+    const timestamp = Date.now();
     const adminData = {
       name: 'Admin User',
-      email: 'admin@example.com',
+      email: `admin-${timestamp}@example.com`,
       password: 'password123',
       role: 'admin'
     };
 
     const candidateData = {
       name: 'Candidate User',
-      email: 'candidate@example.com',
+      email: `candidate-${timestamp}@example.com`,
       password: 'password123',
       role: 'candidate'
     };
